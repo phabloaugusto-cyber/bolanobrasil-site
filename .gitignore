@@ -1,0 +1,16 @@
+.env 
+.env.* 
+node_modules 
+.next 
+*.log 
+*.zip 
+*.tar
+*.gz
+analises.txt
+noticias-do-dia.txt
+analises-times.txt
+acervo-antigo.zip
+api_BKP/
+app/admin.bak/
+app/api/admin.bak/
+

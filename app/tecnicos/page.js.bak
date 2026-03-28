@@ -1,0 +1,439 @@
+import Link from "next/link";
+import { getTecnicosOrdenados } from "../../lib/tecnicos";
+
+export const metadata = {
+  title: "Técnicos da Série A 2026 | BolaNoBrasil",
+  description:
+    "Lista dos 20 técnicos da Série A 2026, com data de entrada, tempo no cargo e mudanças de treinador na temporada.",
+};
+
+function formatDateBR(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
+function diffDays(dateStr) {
+  if (!dateStr) return 0;
+
+  const start = new Date(`${dateStr}T12:00:00`);
+  const now = new Date();
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    12,
+    0,
+    0
+  );
+
+  const ms = today.getTime() - start.getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+function formatTempoCargo(dateStr) {
+  const days = diffDays(dateStr);
+
+  if (days < 30) return `${days} dia${days === 1 ? "" : "s"}`;
+
+  const months = Math.floor(days / 30);
+  const restDays = days % 30;
+
+  if (months < 12) {
+    if (restDays === 0) {
+      return `${months} mês${months === 1 ? "" : "es"}`;
+    }
+    return `${months} mês${months === 1 ? "" : "es"} e ${restDays} dia${restDays === 1 ? "" : "s"}`;
+  }
+
+  const years = Math.floor(months / 12);
+  const restMonths = months % 12;
+
+  if (restMonths === 0) {
+    return `${years} ano${years === 1 ? "" : "s"}`;
+  }
+
+  return `${years} ano${years === 1 ? "" : "s"} e ${restMonths} mês${restMonths === 1 ? "" : "es"}`;
+}
+
+function getUltimaSaida(clube) {
+  if (!clube.mudancasTemporada?.length) return null;
+
+  return [...clube.mudancasTemporada].sort((a, b) => {
+    return new Date(b.saida) - new Date(a.saida);
+  })[0];
+}
+
+export default function TecnicosPage() {
+  const clubes = getTecnicosOrdenados();
+
+  const comMudanca = clubes.filter((item) => item.mudancasTemporada.length > 0);
+  const semMudanca = clubes.length - comMudanca.length;
+
+  const ultimaMudanca = [...clubes]
+    .flatMap((item) =>
+      item.mudancasTemporada.map((mudanca) => ({
+        clube: item.clube,
+        ...mudanca,
+      }))
+    )
+    .sort((a, b) => new Date(b.saida) - new Date(a.saida))[0];
+
+  return (
+    <main style={styles.page}>
+      <div style={styles.wrap}>
+        <div style={styles.topLinkWrap}>
+          <Link href="/" style={styles.topLink}>
+            ← Início
+          </Link>
+        </div>
+
+        <header style={styles.header}>
+          <p style={styles.kicker}>BolaNoBrasil</p>
+          <h1 style={styles.title}>Técnicos da Série A 2026</h1>
+          <p style={styles.subtitle}>
+            Lista dos 20 técnicos do Brasileirão, com data de entrada, tempo no cargo
+            e registro das mudanças de treinador na temporada.
+          </p>
+        </header>
+
+        <section style={styles.summaryGrid}>
+          <div style={styles.summaryCard}>
+            <span style={styles.summaryLabel}>Clubes sem mudança</span>
+            <strong style={styles.summaryValue}>{semMudanca}</strong>
+          </div>
+
+          <div style={styles.summaryCard}>
+            <span style={styles.summaryLabel}>Clubes com mudança</span>
+            <strong style={styles.summaryValue}>{comMudanca.length}</strong>
+          </div>
+
+          <div style={styles.summaryCardWide}>
+            <span style={styles.summaryLabel}>Troca mais recente</span>
+            <strong style={styles.summaryValueText}>
+              {ultimaMudanca
+                ? `${ultimaMudanca.clube} • ${ultimaMudanca.nome} saiu em ${formatDateBR(
+                    ultimaMudanca.saida
+                  )}`
+                : "Nenhuma troca registrada"}
+            </strong>
+          </div>
+        </section>
+
+        <section style={styles.list}>
+          {clubes.map((item) => {
+            const qtdMudancas = item.mudancasTemporada.length;
+            const ultimaSaida = getUltimaSaida(item);
+
+            return (
+              <article key={item.slug} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div>
+                    <h2 style={styles.clubName}>{item.clube}</h2>
+                    <p style={styles.currentCoach}>{item.tecnicoAtual}</p>
+                  </div>
+
+                  <div
+                    style={{
+                      ...styles.badge,
+                      ...(qtdMudancas > 0 ? styles.badgeWarn : styles.badgeOk),
+                    }}
+                  >
+                    {qtdMudancas > 0
+                      ? `${qtdMudancas} mudança${qtdMudancas > 1 ? "s" : ""}`
+                      : "Sem mudança"}
+                  </div>
+                </div>
+
+                <div style={styles.infoGrid}>
+                  <div style={styles.infoBox}>
+                    <span style={styles.infoLabel}>Data de entrada</span>
+                    <strong style={styles.infoValue}>{formatDateBR(item.entradaAtual)}</strong>
+                  </div>
+
+                  <div style={styles.infoBox}>
+                    <span style={styles.infoLabel}>Tempo no cargo</span>
+                    <strong style={styles.infoValue}>{formatTempoCargo(item.entradaAtual)}</strong>
+                  </div>
+
+                  <div style={styles.infoBox}>
+                    <span style={styles.infoLabel}>Mudanças em 2026</span>
+                    <strong style={styles.infoValue}>{qtdMudancas}</strong>
+                  </div>
+
+                  <div style={styles.infoBox}>
+                    <span style={styles.infoLabel}>Última saída</span>
+                    <strong style={styles.infoValue}>
+                      {ultimaSaida ? formatDateBR(ultimaSaida.saida) : "Sem troca"}
+                    </strong>
+                  </div>
+                </div>
+
+                {qtdMudancas > 0 ? (
+                  <div style={styles.historyWrap}>
+                    <h3 style={styles.historyTitle}>Quem já saiu</h3>
+
+                    <div style={styles.historyList}>
+                      {item.mudancasTemporada
+                        .slice()
+                        .sort((a, b) => new Date(b.saida) - new Date(a.saida))
+                        .map((mudanca, index) => (
+                          <div key={`${mudanca.nome}-${index}`} style={styles.historyItem}>
+                            <div>
+                              <strong style={styles.historyName}>{mudanca.nome}</strong>
+                              <div style={styles.historyType}>{mudanca.tipo}</div>
+                            </div>
+
+                            <div style={styles.historyDates}>
+                              <span>Entrada: {formatDateBR(mudanca.entrada)}</span>
+                              <span>Saída: {formatDateBR(mudanca.saida)}</span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.noHistory}>
+                    Nenhuma troca de técnico registrada nesta temporada.
+                  </div>
+                )}
+
+                <div style={styles.footer}>
+                  <Link href={`/time/${item.slug}`} style={styles.linkBtn}>
+                    Ver página do clube
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      </div>
+    </main>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top, rgba(22,39,72,0.34) 0%, #050816 42%, #050816 100%)",
+    color: "#f5f7fb",
+  },
+  wrap: {
+    maxWidth: 1040,
+    margin: "0 auto",
+    padding: "20px 16px 160px",
+    fontFamily: "Arial, sans-serif",
+  },
+  topLinkWrap: {
+    marginBottom: 16,
+  },
+  topLink: {
+    color: "#93c5fd",
+    textDecoration: "none",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  header: {
+    marginBottom: 22,
+  },
+  kicker: {
+    margin: "0 0 8px 0",
+    color: "#7ea6ff",
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  },
+  title: {
+    margin: 0,
+    fontSize: 34,
+    lineHeight: 1.05,
+    letterSpacing: "-0.03em",
+  },
+  subtitle: {
+    margin: "10px 0 0 0",
+    color: "#b8c2cc",
+    fontSize: 16,
+    lineHeight: 1.55,
+    maxWidth: 760,
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    background: "#0d1726",
+    borderRadius: 18,
+    padding: 16,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  },
+  summaryCardWide: {
+    background: "#0d1726",
+    borderRadius: 18,
+    padding: 16,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  },
+  summaryLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  summaryValue: {
+    fontSize: 28,
+    fontWeight: 900,
+    letterSpacing: "-0.03em",
+  },
+  summaryValueText: {
+    fontSize: 16,
+    lineHeight: 1.4,
+    color: "#f5f7fb",
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  card: {
+    background: "#0d1726",
+    borderRadius: 18,
+    padding: 20,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  clubName: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.15,
+    letterSpacing: "-0.02em",
+  },
+  currentCoach: {
+    margin: "8px 0 0 0",
+    color: "#cbd5e1",
+    fontSize: 16,
+    fontWeight: 700,
+  },
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    padding: "7px 12px",
+    fontWeight: 800,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  badgeOk: {
+    background: "rgba(34,197,94,0.12)",
+    color: "#86efac",
+    border: "1px solid rgba(34,197,94,0.22)",
+  },
+  badgeWarn: {
+    background: "rgba(59,130,246,0.12)",
+    color: "#93c5fd",
+    border: "1px solid rgba(59,130,246,0.22)",
+  },
+  infoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 10,
+    marginBottom: 18,
+  },
+  infoBox: {
+    background: "rgba(255,255,255,0.03)",
+    borderRadius: 14,
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.04)",
+  },
+  infoLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  infoValue: {
+    color: "#f5f7fb",
+    fontSize: 15,
+    lineHeight: 1.35,
+  },
+  historyWrap: {
+    marginTop: 6,
+  },
+  historyTitle: {
+    margin: "0 0 12px 0",
+    fontSize: 17,
+    color: "#f5f7fb",
+  },
+  historyList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  historyItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 14,
+    flexWrap: "wrap",
+    padding: 14,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.04)",
+    borderRadius: 14,
+  },
+  historyName: {
+    display: "block",
+    color: "#f5f7fb",
+    marginBottom: 4,
+  },
+  historyType: {
+    color: "#94a3b8",
+    fontSize: 13,
+  },
+  historyDates: {
+    display: "grid",
+    gap: 4,
+    color: "#cbd5e1",
+    fontSize: 13,
+    textAlign: "right",
+  },
+  noHistory: {
+    marginTop: 2,
+    color: "#94a3b8",
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  footer: {
+    marginTop: 18,
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  linkBtn: {
+    textDecoration: "none",
+    color: "#fff",
+    background: "#16304f",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+};

@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Competition {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  emblem    String?
+  areaName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seasons   Season[]
+  teams     Team[]
+}
+
+model Season {
+  id              Int       @id @default(autoincrement())
+  competitionId   Int
+  year            Int
+  startDate       DateTime?
+  endDate         DateTime?
+  currentMatchday Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  competition     Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  standings       Standing[]
+  matches         Match[]
+
+  @@unique([competitionId, year])
+}
+
+model Team {
+  id            Int      @id @default(autoincrement())
+  competitionId Int
+  apiId         Int      @unique
+  name          String
+  shortName     String?
+  tla           String?
+  crest         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  homeMatches   Match[]     @relation("HomeTeam")
+  awayMatches   Match[]     @relation("AwayTeam")
+}
+
+model Match {
+  id           Int      @id @default(autoincrement())
+  apiId        Int      @unique
+  seasonId     Int
+  utcDate      DateTime
+  status       String
+  matchday     Int?
+  stage        String?
+  group        String?
+  homeTeamId   Int
+  awayTeamId   Int
+  homeScore    Int?
+  awayScore    Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  season       Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  homeTeam     Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam     Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+
+  @@index([seasonId])
+  @@index([utcDate])
+}
+
+model Standing {
+  id         Int      @id @default(autoincrement())
+  seasonId   Int
+  type       String?
+  stage      String?
+  group      String?
+  tableJson  Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@index([seasonId])
+}

@@ -1,0 +1,29 @@
+{
+  "name": "bolanobrasil",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "x:post-latest": "node scripts/post-latest-to-x.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.0",
+    "@supabase/supabase-js": "^2.100.0",
+    "gray-matter": "^4.0.3",
+    "next": "14.2.35",
+    "pg": "^8.11.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remark": "^15.0.1",
+    "remark-html": "^16.0.1",
+    "twitter-api-v2": "^1.23.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "prisma": "^6.11.0",
+    "typescript": "^6.0.2"
+  }
+}

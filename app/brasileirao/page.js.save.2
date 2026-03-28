@@ -1,0 +1,662 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import AdSlot from "../components/AdSlot";
+
+/**
+ * Brasileirão: layout tipo portal
+ * - Tabela (esquerda) + Jogos por rodada (direita)
+ * - Abas: HOJE / PRÓXIMOS / ENCERRADOS / TODOS / TABELA
+ * - Selector de Rodada
+ * - Datas em dd/mm/aaaa
+ */
+
+const COMPETITION = "BSA";
+const SEASON = "2026";
+
+export default function BrasileiraoPage() {
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [standings, setStandings] = useState(null);
+
+  // tabs: TODAY | NEXT | FINISHED | ALL | TABLE
+  const [tab, setTab] = useState("TODAY");
+  const [round, setRound] = useState(null); // número da rodada
+
+  useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setErr("");
+
+        // Buscando em paralelo
+        const [mRes, sRes] = await Promise.all([
+          fetch(`/api/matches?competition=${COMPETITION}&season=${SEASON}`, { cache: "no-store" }),
+          fetch(`/api/standings?competition=${COMPETITION}&season=${SEASON}`, { cache: "no-store" }),
+        ]);
+
+        if (!mRes.ok) throw new Error(`Erro ao buscar jogos (${mRes.status})`);
+        if (!sRes.ok) throw new Error(`Erro ao buscar tabela (${sRes.status})`);
+
+        const mJson = await mRes.json();
+        const sJson = await sRes.json();
+
+        const list = Array.isArray(mJson?.matches) ? mJson.matches : [];
+        const table = sJson?.standings || sJson;
+
+        if (!alive) return;
+
+        setMatches(list);
+        setStandings(table);
+
+        // define rodada padrão = maior matchday "em andamento" ou 1
+        const md = guessDefaultMatchday(list);
+        setRound(md);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e?.message || "Erro desconhecido");
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const todayKey = useMemo(() => toDateKeyBR(new Date()), []);
+
+  const allMatchdays = useMemo(() => {
+    const set = new Set();
+    for (const m of matches) {
+      if (typeof m?.matchday === "number") set.add(m.matchday);
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [matches]);
+
+  const filteredMatches = useMemo(() => {
+    const arr = [...matches];
+
+    // Ordenação por data
+    arr.sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
+    if (tab === "ALL" || tab === "TABLE") return arr;
+
+    if (tab === "FINISHED") {
+      return arr.filter((m) => (m?.status || "").toUpperCase() === "FINISHED");
+    }
+
+    if (tab === "NEXT") {
+      return arr.filter((m) => {
+        const st = (m?.status || "").toUpperCase();
+        const key = toDateKeyBR(new Date(m.utcDate));
+        return (st === "SCHEDULED" || st === "TIMED") && key >= todayKey;
+      });
+    }
+
+    // TODAY
+    return arr.filter((m) => toDateKeyBR(new Date(m.utcDate)) === todayKey);
+  }, [matches, tab, todayKey]);
+
+  // Jogos por rodada
+  const matchesByRound = useMemo(() => {
+    const map = new Map(); // matchday -> matches[]
+    for (const m of filteredMatches) {
+      const md = typeof m?.matchday === "number" ? m.matchday : 0;
+      if (!map.has(md)) map.set(md, []);
+      map.get(md).push(m);
+    }
+    // ordenar por rodada e por data
+    const keys = Array.from(map.keys()).sort((a, b) => a - b);
+    const out = keys.map((k) => ({
+      matchday: k,
+      matches: (map.get(k) || []).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)),
+    }));
+    return out;
+  }, [filteredMatches]);
+
+  // Rodada selecionada (para aba TABELA e também para o painel direito “tipo GE”)
+  const selectedRound = useMemo(() => {
+    if (!round) return null;
+    return round;
+  }, [round]);
+
+  const selectedRoundMatches = useMemo(() => {
+    if (!selectedRound) return [];
+    return matches
+      .filter((m) => m?.matchday === selectedRound)
+      .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+  }, [matches, selectedRound]);
+
+  const tableRows = useMemo(() => {
+    // football-data: standings[0].table costuma ter a classificação
+    // mas pode variar. Vamos achar a primeira "table" disponível.
+    const s = standings;
+    if (!s) return [];
+
+    if (Array.isArray(s?.standings)) {
+      const any = s.standings.find((x) => Array.isArray(x?.table)) || s.standings[0];
+      return Array.isArray(any?.table) ? any.table : [];
+    }
+
+    if (Array.isArray(s?.[0]?.table)) return s[0].table;
+    if (Array.isArray(s?.table)) return s.table;
+
+    return [];
+  }, [standings]);
+
+  // ------------ RENDER ------------
+  return (
+    <div style={styles.page}>
+      {/* Barra de ação */}
+      <div style={styles.headerBlock}>
+        <h1 style={styles.h1}>Brasileirão 2026</h1>
+        <div style={styles.subtitle}>Tabela e jogos por rodada, com atualização direto da fonte.</div>
+
+        <div style={styles.tabsRow}>
+          <TabButton label="HOJE" active={tab === "TODAY"} onClick={() => setTab("TODAY")} />
+          <TabButton label="PRÓXIMOS" active={tab === "NEXT"} onClick={() => setTab("NEXT")} />
+          <TabButton label="ENCERRADOS" active={tab === "FINISHED"} onClick={() => setTab("FINISHED")} />
+          <TabButton label="TODOS" active={tab === "ALL"} onClick={() => setTab("ALL")} />
+          <TabButton label="TABELA" active={tab === "TABLE"} onClick={() => setTab("TABLE")} />
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <AdSlot slot="top" />
+        </div>
+
+        {err ? <div style={styles.error}>Erro: {err}</div> : null}
+        {loading ? <div style={styles.status}>Carregando…</div> : null}
+
+        {!loading && !err ? (
+          <div style={styles.status}>
+            <strong>Status:</strong> OK: {matches.length} jogos (hoje: {toBRDateOnly(new Date())})
+          </div>
+        ) : null}
+      </div>
+
+      {/* GRID: esquerda (tabela) + direita (jogos por rodada) */}
+      <div style={styles.grid}>
+        {/* ESQUERDA: TABELA */}
+        <aside style={styles.left}>
+          <div style={styles.panelTitle}>Tabela do Brasileirão 2026</div>
+
+          {tableRows.length === 0 ? (
+            <div style={styles.muted}>Sem dados de tabela no momento.</div>
+          ) : (
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.thCenter}>#</th>
+                    <th style={styles.thLeft}>Time</th>
+                    <th style={styles.thCenter}>P</th>
+                    <th style={styles.thCenter}>J</th>
+                    <th style={styles.thCenter}>V</th>
+                    <th style={styles.thCenter}>E</th>
+                    <th style={styles.thCenter}>D</th>
+                    <th style={styles.thCenter}>GP</th>
+                    <th style={styles.thCenter}>GC</th>
+                    <th style={styles.thCenter}>SG</th>
+                    <th style={styles.thCenter}>%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((r) => {
+                    const t = r?.team || {};
+                    const crest = t?.crest || t?.crestUrl || "";
+                    const played = r?.playedGames || 0;
+                    const points = r?.points ?? 0;
+                    const won = r?.won ?? 0;
+                    const draw = r?.draw ?? 0;
+                    const lost = r?.lost ?? 0;
+                    const gf = r?.goalsFor ?? 0;
+                    const ga = r?.goalsAgainst ?? 0;
+                    const gd = r?.goalDifference ?? (gf - ga);
+                    const pct = played ? Math.round((points / (played * 3)) * 100) : 0;
+
+                    return (
+                      <tr key={r?.position || `${t?.name}-${points}`} style={styles.tr}>
+                        <td style={styles.tdCenter}>{r?.position ?? "-"}</td>
+                        <td style={styles.tdLeft}>
+                          <div style={styles.teamCell}>
+                            {crest ? <img src={crest} alt="" style={styles.crestSmall} /> : null}
+                            <span>{t?.shortName || t?.name || "-"}</span>
+                          </div>
+                        </td>
+                        <td style={styles.tdCenter}><strong>{points}</strong></td>
+                        <td style={styles.tdCenter}>{played}</td>
+                        <td style={styles.tdCenter}>{won}</td>
+                        <td style={styles.tdCenter}>{draw}</td>
+                        <td style={styles.tdCenter}>{lost}</td>
+                        <td style={styles.tdCenter}>{gf}</td>
+                        <td style={styles.tdCenter}>{ga}</td>
+                        <td style={styles.tdCenter}>{gd}</td>
+                        <td style={styles.tdCenter}>{pct}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ marginTop: 12 }}>
+            <AdSlot slot="sidebar" />
+          </div>
+        </aside>
+
+        {/* DIREITA: JOGOS (tipo GE: rodadas) */}
+        <section style={styles.right}>
+          <div style={styles.rightTopRow}>
+            <div style={styles.panelTitle}>
+              {tab === "TABLE" ? "Jogos por Rodada" : "Jogos"}
+            </div>
+
+            {/* seletor de rodada (sempre disponível) */}
+            <div style={styles.roundRow}>
+              <span style={styles.roundLabel}>Rodada:</span>
+              <select
+                value={selectedRound ?? ""}
+                onChange={(e) => setRound(Number(e.target.value))}
+                style={styles.select}
+              >
+                {allMatchdays.map((md) => (
+                  <option key={md} value={md}>
+                    {md}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Conteúdo do painel direito */}
+          {tab === "TABLE" ? (
+            <RoundBlock matchday={selectedRound} matches={selectedRoundMatches} />
+          ) : (
+            <div>
+              {/* Mostra rodadas em blocos (estilo GE) */}
+              {matchesByRound.length === 0 ? (
+                <div style={styles.muted}>Sem jogos para mostrar nesta aba.</div>
+              ) : (
+                matchesByRound.map((blk) => (
+                  <RoundBlock key={blk.matchday} matchday={blk.matchday} matches={blk.matches} />
+                ))
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <AdSlot slot="bottom" />
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- COMPONENTS ----------------
+
+function TabButton({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.tabBtn,
+        ...(active ? styles.tabBtnActive : null),
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RoundBlock({ matchday, matches }) {
+  const title = matchday ? `Rodada ${matchday}` : "Rodada";
+
+  // agrupa por data dd/mm/aaaa
+  const byDate = useMemo(() => {
+    const map = new Map(); // dateKey -> matches[]
+    for (const m of matches) {
+      const k = toDateKeyBR(new Date(m.utcDate));
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push(m);
+    }
+    const keys = Array.from(map.keys()).sort((a, b) => dateKeyToISO(a).localeCompare(dateKeyToISO(b)));
+    return keys.map((k) => ({
+      dateKey: k,
+      matches: (map.get(k) || []).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)),
+    }));
+  }, [matches]);
+
+  return (
+    <div style={styles.roundBlock}>
+      <div style={styles.roundHeader}>{title}</div>
+
+      {matches.length === 0 ? (
+        <div style={styles.muted}>Sem jogos nesta rodada.</div>
+      ) : (
+        <div>
+          {byDate.map((d) => (
+            <div key={d.dateKey} style={{ marginTop: 10 }}>
+              <div style={styles.dateHeader}>{d.dateKey}</div>
+              <div style={styles.cardsGrid}>
+                {d.matches.map((m) => (
+                  <MatchCard key={m.id || `${m.homeTeam?.id}-${m.awayTeam?.id}-${m.utcDate}`} match={m} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchCard({ match }) {
+  const ht = match?.homeTeam?.shortName || match?.homeTeam?.name || "-";
+  const at = match?.awayTeam?.shortName || match?.awayTeam?.name || "-";
+  const homeLogo = match?.homeTeam?.crest || match?.homeTeam?.crestUrl || "";
+  const awayLogo = match?.awayTeam?.crest || match?.awayTeam?.crestUrl || "";
+
+  const statusRaw = (match?.status || "").toUpperCase();
+  const status =
+    statusRaw === "FINISHED"
+      ? "ENCERRADO"
+      : statusRaw === "IN_PLAY"
+      ? "AO VIVO"
+      : statusRaw === "PAUSED"
+      ? "INTERVALO"
+      : statusRaw === "TIMED"
+      ? "HOJE"
+      : statusRaw === "SCHEDULED"
+      ? "AGENDADO"
+      : statusRaw || "-";
+
+  const scoreH = match?.score?.fullTime?.home ?? match?.score?.halfTime?.home ?? null;
+  const scoreA = match?.score?.fullTime?.away ?? match?.score?.halfTime?.away ?? null;
+
+  const stadium = match?.venue || "";
+
+  return (
+    <div style={styles.matchCard}>
+      <div style={styles.rowTop}>
+        <div style={styles.teamLine}>
+          {homeLogo ? <img src={homeLogo} alt="" style={styles.crest} /> : null}
+          <span style={styles.teamName}>{ht}</span>
+
+          <span style={{ margin: "0 10px", opacity: 0.7 }}>x</span>
+
+          {awayLogo ? <img src={awayLogo} alt="" style={styles.crest} /> : null}
+          <span style={styles.teamName}>{at}</span>
+        </div>
+
+        <div style={styles.metaRight}>{fmtTimeBR(match?.utcDate)}</div>
+      </div>
+
+      <div style={styles.rowBottom}>
+        <div style={styles.score}>
+          {scoreH ?? "--"}&nbsp;:&nbsp;{scoreA ?? "--"}
+        </div>
+        <div style={styles.badge}>
+          {status}
+          {stadium ? <span style={{ opacity: 0.7 }}> · {stadium}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- HELPERS ----------------
+
+function guessDefaultMatchday(matches) {
+  const mds = matches
+    .map((m) => (typeof m?.matchday === "number" ? m.matchday : null))
+    .filter((x) => x !== null);
+  if (mds.length === 0) return 1;
+
+  // tenta achar a rodada mais recente que tenha jogo hoje ou futuro
+  const nowKey = toDateKeyBR(new Date());
+  const futureOrToday = matches
+    .filter((m) => toDateKeyBR(new Date(m.utcDate)) >= nowKey)
+    .map((m) => (typeof m?.matchday === "number" ? m.matchday : null))
+    .filter((x) => x !== null);
+
+  if (futureOrToday.length > 0) {
+    return Math.min(...futureOrToday);
+  }
+
+  // senão, usa a maior rodada existente
+  return Math.max(...mds);
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+// dd/mm/yyyy (Brasil)
+function toDateKeyBR(d) {
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = String(d.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function toBRDateOnly(d) {
+  return toDateKeyBR(d);
+}
+
+function fmtTimeBR(utcDate) {
+  if (!utcDate) return "-";
+  const d = new Date(utcDate);
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+}
+
+// para ordenar dd/mm/yyyy como ISO
+function dateKeyToISO(br) {
+  const [dd, mm, yyyy] = String(br || "").split("/");
+  if (!dd || !mm || !yyyy) return "0000-00-00";
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// ---------------- STYLES ----------------
+
+const styles = {
+
+page: {
+  maxWidth: "1400px",
+  margin: "0 auto",
+  padding: "20px",
+},
+
+grid: {
+  display: "grid",
+  gridTemplateColumns: "65% 35%",
+  gap: "20px",
+  alignItems: "start",
+},
+
+card: {
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: "14px",
+  padding: "16px",
+  background: "rgba(0,0,0,0.35)",
+  backdropFilter: "blur(6px)",
+},
+
+title: {
+  fontSize: "22px",
+  fontWeight: "800",
+  marginBottom: "12px",
+},
+
+/* ---------- TABELA ---------- */
+
+table: {
+  width: "100%",
+  borderCollapse: "collapse",
+},
+
+th: {
+  textAlign: "left",
+  fontSize: "13px",
+  opacity: "0.8",
+  padding: "8px",
+},
+
+td: {
+  padding: "8px",
+  borderTop: "1px solid rgba(255,255,255,0.06)",
+},
+
+team: {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+},
+
+logo: {
+  width: "18px",
+  height: "18px",
+},
+
+/* ---------- CORES TABELA ---------- */
+
+liberta: {
+  borderLeft: "4px solid #2ecc71",
+  background: "rgba(46,204,113,0.07)",
+},
+
+pre: {
+  borderLeft: "4px solid #3498db",
+  background: "rgba(52,152,219,0.07)",
+},
+
+sula: {
+  borderLeft: "4px solid #f39c12",
+  background: "rgba(243,156,18,0.07)",
+},
+
+z4: {
+  borderLeft: "4px solid #e74c3c",
+  background: "rgba(231,76,60,0.08)",
+},
+
+/* ---------- RODADA ---------- */
+
+roundBar: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: "10px",
+},
+
+roundControls: {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+},
+
+roundBtn: {
+  padding: "6px 10px",
+  borderRadius: "8px",
+  border: "1px solid rgba(255,255,255,0.15)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#fff",
+  cursor: "pointer",
+  fontWeight: "700",
+},
+
+roundBtnDisabled: {
+  opacity: "0.4",
+  cursor: "not-allowed",
+},
+
+roundPill: {
+  padding: "6px 12px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(0,0,0,0.5)",
+  fontWeight: "800",
+  color: "#fff",
+},
+
+/* ---------- JOGOS ---------- */
+
+matchCard: {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: "12px",
+  padding: "12px",
+  marginBottom: "10px",
+  background: "rgba(255,255,255,0.03)",
+},
+
+matchTeams: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+
+teamSide: {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+},
+
+score: {
+  fontWeight: "900",
+  fontSize: "16px",
+},
+
+matchInfo: {
+  fontSize: "12px",
+  opacity: "0.7",
+  marginTop: "4px",
+},
+
+/* ---------- ABAS ---------- */
+
+tabs: {
+  display: "flex",
+  gap: "8px",
+  marginBottom: "12px",
+},
+
+tab: {
+  padding: "6px 12px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.2)",
+  cursor: "pointer",
+  fontWeight: "700",
+  fontSize: "13px",
+},
+
+tabActive: {
+  background: "#2d7df6",
+  border: "1px solid #2d7df6",
+},
+
+/* ---------- ADS ---------- */
+
+adsTop: {
+  border: "1px dashed rgba(255,255,255,0.2)",
+  padding: "10px",
+  borderRadius: "10px",
+  textAlign: "center",
+  marginBottom: "15px",
+  fontSize: "13px",
+  opacity: "0.7",
+}
+
+};

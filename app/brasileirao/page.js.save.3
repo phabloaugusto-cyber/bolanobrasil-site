@@ -1,0 +1,750 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import AdSenseAuto from "../shared/AdSenseAuto";
+
+/**
+ * Brasileirão 2026 — layout tipo GE:
+ * - Tabela (esquerda) + Jogos por Rodada (direita)
+ * - Abas: HOJE | PRÓXIMOS | ENCERRADOS | TODOS | TABELA
+ * - Rodadas na horizontal (chips) + dropdown
+ * - Datas em dd/mm/aaaa
+ *
+ * Observação:
+ * - NÃO exporta metadata aqui (arquivo é Client Component).
+ */
+
+const COMPETITION = "BSA";
+const SEASON = "2026";
+
+export default function BrasileiraoPage() {
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const [matches, setMatches] = useState([]);
+  const [standings, setStandings] = useState(null);
+
+  // abas: TODAY | NEXT | FINISHED | ALL | TABLE
+  const [tab, setTab] = useState("TABLE");
+
+  // rodada selecionada
+  const [round, setRound] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setErr("");
+
+        const sRes = await fetch(
+          `/api/standings?competition=${COMPETITION}&season=${SEASON}`,
+          { cache: "no-store" }
+        );
+        if (!sRes.ok) throw new Error("Falha ao buscar standings");
+        const sJson = await sRes.json();
+
+        const mRes = await fetch(
+          `/api/matches?competition=${COMPETITION}&season=${SEASON}`,
+          { cache: "no-store" }
+        );
+        if (!mRes.ok) throw new Error("Falha ao buscar jogos");
+        const mJson = await mRes.json();
+
+        if (!alive) return;
+
+        setStandings(sJson);
+        setMatches(Array.isArray(mJson?.matches) ? mJson.matches : []);
+
+        const rounds = extractRounds(
+          Array.isArray(mJson?.matches) ? mJson.matches : []
+        );
+        setRound(rounds[0] ?? null);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e?.message || "Erro ao carregar dados");
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const todayKey = useMemo(() => {
+    const now = new Date();
+    return `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
+  }, []);
+
+  const rounds = useMemo(() => extractRounds(matches), [matches]);
+
+  useEffect(() => {
+    if (!round && rounds.length) setRound(rounds[0]);
+  }, [round, rounds]);
+
+  const filteredMatchesByTab = useMemo(() => {
+    const all = matches || [];
+    const now = Date.now();
+
+    const statusOf = (m) => (m?.status || "").toUpperCase();
+
+    const isToday = (m) => fmtDateBR(m?.utcDate) === todayKey;
+
+    const isUpcoming = (m) => {
+      const s = statusOf(m);
+      if (["SCHEDULED", "TIMED", "POSTPONED"].includes(s)) return true;
+      const t = m?.utcDate ? new Date(m.utcDate).getTime() : 0;
+      return t > now && !["FINISHED"].includes(s);
+    };
+
+    const isFinished = (m) => statusOf(m) === "FINISHED";
+
+    if (tab === "TODAY") return all.filter(isToday);
+    if (tab === "NEXT") return all.filter(isUpcoming);
+    if (tab === "FINISHED") return all.filter(isFinished);
+    if (tab === "ALL") return all;
+    return all;
+  }, [matches, tab, todayKey]);
+
+  const matchesOfRound = useMemo(() => {
+    if (!round) return [];
+    return (matches || [])
+      .filter((m) => String(m?.matchday || "") === String(round))
+      .sort((a, b) => {
+        const ta = a?.utcDate ? new Date(a.utcDate).getTime() : 0;
+        const tb = b?.utcDate ? new Date(b.utcDate).getTime() : 0;
+        return ta - tb;
+      });
+  }, [matches, round]);
+
+  const standingsRows = useMemo(() => {
+    const table =
+      standings?.standings?.[0]?.table ||
+      standings?.standings?.find((x) => x?.type === "TOTAL")?.table ||
+      [];
+    return Array.isArray(table) ? table : [];
+  }, [standings]);
+
+  const statusLine = useMemo(() => {
+    if (loading) return "Carregando...";
+    if (err) return `Erro: ${err}`;
+    return `OK: ${matches.length} jogos (hoje: ${todayKey})`;
+  }, [loading, err, matches.length, todayKey]);
+
+  return (
+    <div style={styles.page}>
+      {/* AdSense Auto Ads (se você colocar seu ca-pub no arquivo shared/AdSenseAuto.js) */}
+      <AdSenseAuto />
+
+      <div style={styles.hero}>
+        <div style={styles.heroTitle}>Brasileirão {SEASON}</div>
+        <div style={styles.heroSub}>
+          Tabela e jogos por rodada, com atualização direto da fonte.
+        </div>
+      </div>
+
+      <div style={styles.tabsRow}>
+        <TabBtn active={tab === "TODAY"} onClick={() => setTab("TODAY")}>
+          HOJE
+        </TabBtn>
+        <TabBtn active={tab === "NEXT"} onClick={() => setTab("NEXT")}>
+          PRÓXIMOS
+        </TabBtn>
+        <TabBtn active={tab === "FINISHED"} onClick={() => setTab("FINISHED")}>
+          ENCERRADOS
+        </TabBtn>
+        <TabBtn active={tab === "ALL"} onClick={() => setTab("ALL")}>
+          TODOS
+        </TabBtn>
+        <TabBtn active={tab === "TABLE"} onClick={() => setTab("TABLE")}>
+          TABELA
+        </TabBtn>
+      </div>
+
+      <div style={styles.topInfo}>
+        <div style={styles.statusBox}>
+          <strong>Status:</strong> {statusLine}
+        </div>
+
+        {/* bloco “fixo” p/ ad (pode virar slot AdSense depois) */}
+        <div style={styles.adTop}>ESPAÇO PARA ANÚNCIO (responsivo)</div>
+      </div>
+
+      <div style={styles.grid}>
+        {/* ESQUERDA: tabela */}
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>Tabela do Brasileirão {SEASON}</div>
+
+          {loading ? (
+            <div style={styles.muted}>Carregando tabela...</div>
+          ) : err ? (
+            <div style={styles.errorBox}>{err}</div>
+          ) : (
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...styles.th, width: 38 }}>#</th>
+                    <th style={{ ...styles.th, textAlign: "left", width: 240 }}>
+                      Time
+                    </th>
+                    <th style={styles.th}>P</th>
+                    <th style={styles.th}>J</th>
+                    <th style={styles.th}>V</th>
+                    <th style={styles.th}>E</th>
+                    <th style={styles.th}>D</th>
+                    <th style={styles.th}>GP</th>
+                    <th style={styles.th}>GC</th>
+                    <th style={styles.th}>SG</th>
+                    <th style={styles.th}>%</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {standingsRows.map((r) => {
+                    const pos = r?.position ?? 0;
+                    const team = r?.team || {};
+                    const crest = team?.crest || team?.crestUrl || "";
+                    const name = team?.shortName || team?.name || "—";
+
+                    const rowStyle = rowBadgeByPosition(pos);
+
+                    return (
+                      <tr key={`${pos}-${name}`} style={rowStyle.row}>
+                        <td style={styles.tdCenter}>{pos}</td>
+                        <td style={styles.tdTeam}>
+                          <span style={{ ...styles.posBar, background: rowStyle.bar }} />
+                          {crest ? (
+                            <img
+                              src={crest}
+                              alt=""
+                              style={styles.crestSmallHD}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : null}
+                          <span style={styles.teamName}>{name}</span>
+                        </td>
+                        <td style={styles.tdCenter}>{r?.points ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.playedGames ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.won ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.draw ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.lost ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.goalsFor ?? "—"}</td>
+                        <td style={styles.tdCenter}>{r?.goalsAgainst ?? "—"}</td>
+                        <td style={styles.tdCenter}>
+                          {typeof r?.goalDifference === "number"
+                            ? r.goalDifference
+                            : "—"}
+                        </td>
+                        <td style={styles.tdCenter}>
+                          {calcPct(r?.points, r?.playedGames)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={styles.legend}>
+            <span style={{ ...styles.dot, background: "rgba(46, 204, 113, 0.32)" }} />
+            Libertadores (G4)
+            <span style={{ ...styles.dot, background: "rgba(52, 152, 219, 0.32)" }} />
+            Sul-Americana (5–12)
+            <span style={{ ...styles.dot, background: "rgba(231, 76, 60, 0.32)" }} />
+            Rebaixamento (Z4)
+          </div>
+        </div>
+
+        {/* DIREITA: jogos */}
+        <div style={styles.card}>
+          <div style={styles.cardTopRow}>
+            <div style={styles.cardTitle}>Jogos</div>
+
+            <div style={styles.roundSelectRow}>
+              <span style={styles.mutedSmall}>Rodada:</span>
+              <select
+                value={round ?? ""}
+                onChange={(e) => setRound(e.target.value)}
+                style={styles.select}
+              >
+                {rounds.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={styles.roundChipsWrap}>
+            {rounds.slice(0, 60).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRound(r)}
+                style={{
+                  ...styles.chip,
+                  ...(String(r) === String(round) ? styles.chipActive : null),
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          {tab !== "TABLE" ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={styles.sectionTitle}>
+                {tab === "TODAY"
+                  ? "Jogos de hoje"
+                  : tab === "NEXT"
+                  ? "Próximos jogos"
+                  : tab === "FINISHED"
+                  ? "Encerrados"
+                  : "Todos"}
+              </div>
+
+              {filteredMatchesByTab.length === 0 ? (
+                <div style={styles.muted}>Sem jogos nesse filtro.</div>
+              ) : (
+                filteredMatchesByTab
+                  .slice(0, 60)
+                  .map((m) => <MatchCard key={m?.id || m?.utcDate} match={m} />)
+              )}
+            </div>
+          ) : (
+            <div style={{ marginTop: 12 }}>
+              <div style={styles.sectionTitle}>Rodada {round ?? "—"}</div>
+              <div style={styles.roundDate}>
+                {matchesOfRound[0]?.utcDate ? fmtDateBR(matchesOfRound[0].utcDate) : ""}
+              </div>
+
+              {matchesOfRound.length === 0 ? (
+                <div style={styles.muted}>Sem jogos para essa rodada.</div>
+              ) : (
+                matchesOfRound.map((m) => (
+                  <MatchCard key={m?.id || m?.utcDate} match={m} />
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={styles.footerSpace} />
+    </div>
+  );
+}
+
+/* ---------------- COMPONENTES ---------------- */
+
+function TabBtn({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{ ...styles.tabBtn, ...(active ? styles.tabBtnActive : null) }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Placar “lista”:
+ * Mineiro   2
+ * Palmeiras 2
+ */
+function MatchCard({ match }) {
+  const home = match?.homeTeam || {};
+  const away = match?.awayTeam || {};
+
+  const ht = home?.shortName || home?.name || "—";
+  const at = away?.shortName || away?.name || "—";
+
+  const homeLogo = home?.crest || home?.crestUrl || "";
+  const awayLogo = away?.crest || away?.crestUrl || "";
+
+  const scoreH =
+    typeof match?.score?.fullTime?.home === "number"
+      ? match.score.fullTime.home
+      : null;
+  const scoreA =
+    typeof match?.score?.fullTime?.away === "number"
+      ? match.score.fullTime.away
+      : null;
+
+  const status = (match?.status || "").toUpperCase();
+  const when = fmtDateTimeBR(match?.utcDate);
+
+  return (
+    <div style={styles.matchCard}>
+      <div style={styles.matchHeader}>
+        <div style={styles.metaLeft}>{when}</div>
+        <div style={styles.badgeSofa}>{status || "—"}</div>
+      </div>
+
+      <div style={styles.sofaScoreBox}>
+        <div style={styles.sofaRow}>
+          <div style={styles.sofaTeam}>
+            {homeLogo ? <img src={homeLogo} alt="" style={styles.crestTinyHD} /> : null}
+            <span style={styles.sofaName}>{ht}</span>
+          </div>
+          <div style={styles.sofaNum}>{scoreH ?? "--"}</div>
+        </div>
+
+        <div style={styles.sofaDivider} />
+
+        <div style={styles.sofaRow}>
+          <div style={styles.sofaTeam}>
+            {awayLogo ? <img src={awayLogo} alt="" style={styles.crestTinyHD} /> : null}
+            <span style={styles.sofaName}>{at}</span>
+          </div>
+          <div style={styles.sofaNum}>{scoreA ?? "--"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- HELPERS ---------------- */
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function fmtDateBR(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+function fmtDateTimeBR(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+}
+
+function extractRounds(list) {
+  const set = new Set();
+  (list || []).forEach((m) => {
+    if (m?.matchday) set.add(String(m.matchday));
+  });
+  const arr = Array.from(set).map((x) => Number(x)).filter((n) => !Number.isNaN(n));
+  arr.sort((a, b) => a - b);
+  return arr.map(String);
+}
+
+function calcPct(points, played) {
+  if (typeof points !== "number" || typeof played !== "number" || played <= 0) return "—";
+  const max = played * 3;
+  return String(Math.round((points / max) * 100));
+}
+
+/**
+ * Cores “mais oficiais”:
+ * 1–4  Libertadores (verde)
+ * 5–12 Sul-Americana (azul)
+ * 13–16 neutro (cinza)
+ * 17–20 Z4 (vermelho)
+ */
+function rowBadgeByPosition(pos) {
+  if (pos >= 1 && pos <= 4) {
+    return { bar: "rgba(46, 204, 113, 0.95)", row: { background: "rgba(46, 204, 113, 0.06)" } };
+  }
+  if (pos >= 5 && pos <= 12) {
+    return { bar: "rgba(52, 152, 219, 0.95)", row: { background: "rgba(52, 152, 219, 0.05)" } };
+  }
+  if (pos >= 17) {
+    return { bar: "rgba(231, 76, 60, 0.95)", row: { background: "rgba(231, 76, 60, 0.06)" } };
+  }
+  return { bar: "rgba(255,255,255,0.18)", row: { background: "rgba(255,255,255,0.02)" } };
+}
+
+/* ---------------- STYLES ---------------- */
+
+const styles = {
+  page: {
+    maxWidth: 1480,
+    margin: "0 auto",
+    padding: "22px 16px 80px",
+    color: "#e6edf3",
+  },
+
+  hero: { padding: "14px 0 10px" },
+  heroTitle: { fontSize: 34, fontWeight: 900, letterSpacing: -0.6 },
+  heroSub: { marginTop: 6, opacity: 0.85 },
+
+  tabsRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  tabBtn: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#e6edf3",
+    cursor: "pointer",
+    fontWeight: 800,
+    letterSpacing: 0.3,
+  },
+  tabBtnActive: {
+    background: "linear-gradient(90deg, rgba(0,133,255,0.28), rgba(0,255,209,0.16))",
+    border: "1px solid rgba(0,133,255,0.45)",
+  },
+
+  topInfo: { display: "grid", gridTemplateColumns: "1fr", gap: 12, marginBottom: 14 },
+  statusBox: {
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(0,0,0,0.18)",
+  },
+  adTop: {
+    padding: "18px 14px",
+    borderRadius: 12,
+    border: "1px dashed rgba(255,255,255,0.22)",
+    textAlign: "center",
+    opacity: 0.85,
+  },
+
+  // >>> aqui a “mágica” pra tabela ganhar espaço e reduzir rolagem:
+grid: {
+  display: "grid",
+  gridTemplateColumns: "1.35fr 0.65fr",
+  gap: 16,
+  alignItems: "start",
+},
+
+  card: {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.18))",
+    padding: 14,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+    overflow: "hidden",
+  },
+
+  cardTitle: { fontSize: 22, fontWeight: 900, letterSpacing: -0.3, marginBottom: 10 },
+  cardTopRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  tableWrap: {
+    overflowX: "auto",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.10)",
+  },
+
+  // reduz minWidth e reduz fontes => normalmente some a rolagem no desktop
+  table: {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+},
+
+th: {
+  padding: "6px 6px",
+  textAlign: "center",
+  fontSize: 11,
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.24)",
+  whiteSpace: "nowrap",
+},
+tdCenter: {
+  padding: "6px 6px",
+  textAlign: "center",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  fontVariantNumeric: "tabular-nums",
+  fontSize: 12,
+},
+tdTeam: {
+  padding: "6px 6px",
+  textAlign: "left",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+},
+  posBar: {
+    width: 6,
+    height: 18,
+    borderRadius: 999,
+    display: "inline-block",
+    marginRight: 2,
+    opacity: 0.95,
+  },
+
+  // “HD” (mais nítido) mantendo pequeno
+  crestSmallHD: {
+    width: 18,
+    height: 18,
+    objectFit: "contain",
+    imageRendering: "auto",
+    filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.35))",
+  },
+
+  legend: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    marginTop: 10,
+    opacity: 0.9,
+    fontSize: 13,
+    flexWrap: "wrap",
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    display: "inline-block",
+    marginRight: 6,
+    border: "1px solid rgba(255,255,255,0.14)",
+  },
+
+  roundSelectRow: { display: "flex", alignItems: "center", gap: 8 },
+  select: {
+    background: "rgba(0,0,0,0.30)",
+    color: "#e6edf3",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    outline: "none",
+    fontWeight: 800,
+  },
+
+  roundChipsWrap: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    padding: "8px 2px 10px",
+    marginTop: 6,
+    borderBottom: "1px solid rgba(255,255,255,0.10)",
+  },
+  chip: {
+    flex: "0 0 auto",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#e6edf3",
+    cursor: "pointer",
+    fontWeight: 900,
+    minWidth: 40,
+  },
+  chipActive: {
+    background: "rgba(0,133,255,0.30)",
+    border: "1px solid rgba(0,133,255,0.55)",
+  },
+
+  sectionTitle: { fontSize: 16, fontWeight: 900, marginBottom: 6 },
+  roundDate: { opacity: 0.85, marginBottom: 10 },
+
+  // ====== MatchCard “Sofascore” ======
+  matchCard: {
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    background: "rgba(0,0,0,0.20)",
+    marginBottom: 10,
+  },
+
+  matchHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  metaLeft: { opacity: 0.85, fontSize: 12, whiteSpace: "nowrap" },
+
+  badgeSofa: {
+    fontSize: 11,
+    fontWeight: 900,
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    whiteSpace: "nowrap",
+  },
+
+  sofaScoreBox: {
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.18))",
+    padding: 10,
+  },
+  sofaRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  sofaTeam: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
+  crestTinyHD: {
+    width: 20,
+    height: 20,
+    objectFit: "contain",
+    imageRendering: "auto",
+    filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.35))",
+  },
+  sofaName: {
+    fontWeight: 900,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  sofaNum: {
+    fontWeight: 950,
+    fontSize: 18,
+    minWidth: 28,
+    textAlign: "right",
+    fontVariantNumeric: "tabular-nums",
+    paddingLeft: 8,
+  },
+  sofaDivider: {
+    height: 1,
+    background: "rgba(255,255,255,0.10)",
+    margin: "10px 0",
+  },
+
+  teamName: { fontWeight: 900 },
+
+  muted: { opacity: 0.85 },
+  mutedSmall: { opacity: 0.85, fontSize: 12 },
+  errorBox: {
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid rgba(255,80,80,0.35)",
+    background: "rgba(255,80,80,0.10)",
+  },
+
+  footerSpace: { height: 40 },
+};

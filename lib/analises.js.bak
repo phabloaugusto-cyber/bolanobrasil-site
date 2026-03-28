@@ -1,0 +1,75 @@
+export const analises = [
+  {
+    slug: "quarta-rodada-reforca-bons-comecos-aumenta-pressoes-e-deixa-o-brasileirao-incompleto",
+    title:
+      "Quarta rodada reforça bons começos, aumenta pressões e deixa o Brasileirão ainda incompleto",
+    excerpt:
+      "Palmeiras, São Paulo, Bahia e Botafogo seguem bem avaliados, enquanto Cruzeiro, Santos e Vasco continuam cercados por dúvidas; a rodada, porém, teve três jogos adiados.",
+    category: "Análises",
+    author: "Redação BolaNoBrasil",
+    date: "11 de março de 2026",
+    featured: true,
+    content: [
+      "Após quatro rodadas, o Brasileirão 2026 começa a consolidar algumas impressões. Palmeiras e São Paulo seguem com cara de times confiáveis, o Bahia continua passando boa imagem neste início, e o Botafogo ainda sustenta o peso da ótima largada. São equipes que, cada uma à sua maneira, transmitem sensação de parte alta ou ao menos de presença constante no bloco mais competitivo do campeonato.",
+      "Do outro lado, Cruzeiro, Santos e Vasco seguem entre os que mais decepcionam neste começo. O Cruzeiro ainda não passa firmeza, o Santos continua sem dar resposta realmente convincente e o Vasco permanece com aquela sensação de time pressionado cedo demais. Internacional e Corinthians também ainda deixam mais dúvidas do que certezas.",
+      "Mas a leitura da rodada precisa vir com um asterisco importante: a tabela ainda está incompleta. Bahia x Chapecoense, Botafogo x Vitória e Flamengo x Mirassol foram adiados, o que impede uma fotografia totalmente justa deste início de campeonato. Ainda assim, mesmo com essas lacunas, já dá para perceber que alguns times começam a ganhar corpo, enquanto outros vão transformando tropeços iniciais em pressão real."
+    ]
+  },
+  {
+    slug: "apos-tres-rodadas-brasileirao-2026-separa-confianca-de-pressao",
+    title:
+      "Após três rodadas, Brasileirão 2026 já separa quem inspira confiança de quem vive pressão",
+    excerpt:
+      "Palmeiras, São Paulo e Bahia sustentam boa impressão, enquanto Cruzeiro, Santos, Vasco e Internacional começam o campeonato cercados por dúvida.",
+    category: "Análises",
+    author: "Redação BolaNoBrasil",
+    date: "11 de março de 2026",
+    featured: false,
+    content: [
+      "Depois de três rodadas, o Brasileirão 2026 já começa a mostrar quem realmente largou bem e quem ainda vive mais expectativa do que entrega. Palmeiras, São Paulo e Bahia são os times que passam imagem mais segura até aqui. O Palmeiras confirma a força de elenco e a naturalidade de candidato, o São Paulo junta resultado com confiança, e o Bahia talvez seja a surpresa mais consistente desse início, com cara de time pronto para brigar na parte alta.",
+      "Botafogo e Flamengo também seguem no bloco de cima das boas impressões, mas de maneiras diferentes. O Botafogo ainda mantém o peso da ótima largada, mesmo já tendo sentido um tropeço. O Flamengo, por sua vez, usou a terceira rodada para aliviar a pressão e impedir que a desconfiança crescesse demais. Já Bragantino, Fluminense e Athletico-PR continuam com jeito de times competitivos, daqueles que talvez não dominem manchetes toda rodada, mas têm cara de campanha firme.",
+      "Do lado das preocupações, Cruzeiro, Santos, Vasco e Internacional saem dessas três rodadas com sinais mais incômodos. O Cruzeiro ainda não passa confiança, o Santos começa pressionado, o Vasco parece travado logo na largada, e o Internacional decepciona porque entrega menos do que o elenco sugere. Corinthians, Grêmio e Atlético-MG ainda não entram no grupo do alarme pesado, mas já deixaram claro que precisarão evoluir rápido para não transformar começo irregular em problema de verdade."
+    ]
+  },
+  {
+    slug: "segunda-rodada-brasileirao-2026-reforca-forcas-amplia-duvidas",
+    title:
+      "Segunda rodada do Brasileirão 2026 reforça forças, amplia dúvidas e muda o peso da largada",
+    excerpt:
+      "Palmeiras e Bragantino cresceram, Botafogo e Bahia seguem bem avaliados, enquanto Cruzeiro, Flamengo e Santos deixam a desconfiança aumentar logo no início.",
+    category: "Análises",
+    author: "Redação BolaNoBrasil",
+    date: "11 de março de 2026",
+    featured: false,
+    content: [
+      "A segunda rodada do Brasileirão 2026 não mudou totalmente a impressão da estreia, mas deixou algumas leituras mais firmes. O Palmeiras saiu maior do que entrou, o Bragantino ganhou força com duas vitórias em duas partidas, e Botafogo e Bahia continuam transmitindo boa sensação, mesmo com tropeços diferentes entre si. O Botafogo perdeu, mas ainda carrega o impacto da primeira rodada; o Bahia empatou de novo e segue com cara de time competitivo, organizado e pronto para fazer um campeonato sério.",
+      "Do lado dos times que começam a incomodar o próprio torcedor, Cruzeiro e Flamengo seguem puxando a fila. O Cruzeiro, agora com duas derrotas em dois jogos, já transforma frustração em alerta real. O Flamengo ainda não desabou, mas dois jogos sem vencer para um elenco tratado como candidato pesam mais do que a tabela mostra. O Santos também preocupa, porque depois de uma estreia ruim novamente não conseguiu dar resposta convincente.",
+      "Se a primeira rodada mostrou tendências, a segunda começou a separar sensação de realidade. Palmeiras, Bragantino, Botafogo, Bahia e São Paulo passam imagem de bloco competitivo de parte alta, ainda que em níveis diferentes. Já Cruzeiro, Flamengo, Santos e alguns times que começaram sem força suficiente entram cedo naquela zona incômoda em que o campeonato deixa de ser projeto de ambição e começa a virar teste de reação."
+    ]
+  },
+  {
+    slug: "analise-primeira-rodada-brasileirao-2026",
+    title:
+      "Análise da 1ª rodada do Brasileirão 2026: Botafogo, Bahia e São Paulo largam melhor",
+    excerpt:
+      "A rodada de abertura do Brasileirão 2026 já deixou sinais importantes sobre quem começou forte, quem decepcionou e quais times já entram pressionados na sequência do campeonato.",
+    category: "Análises",
+    author: "Redação BolaNoBrasil",
+    date: "11 de março de 2026",
+    featured: false,
+    content: [
+      "A primeira rodada do Brasileirão 2026 já deixou recados claros. O Botafogo largou com cara de time pronto para brigar na parte de cima da tabela, o Bahia passou ótima impressão e o São Paulo ganhou moral de quem pode fazer um campeonato grande. Palmeiras e Atlético-MG não empolgaram tanto, mas seguem com imagem de candidatos naturais, principalmente pelo peso dos elencos e pela regularidade que costumam sustentar ao longo da competição.",
+      "Do lado das decepções, Cruzeiro e Flamengo saem da rodada inicial devendo mais. O Flamengo porque sempre entra pressionado a render como favorito; o Cruzeiro porque deixou uma imagem frágil demais para quem quer ser tratado como postulante à parte alta. Corinthians e Santos também começaram abaixo do que seus torcedores esperavam e já entram na segunda rodada cercados por cobrança.",
+      "Entre os sinais de alerta, Vasco, Coritiba, Remo e até o Internacional largam com mais preocupação do que confiança. Ainda é cedo para qualquer sentença mais pesada, mas a primeira rodada já desenhou um cenário inicial: há times com cara de quem vai disputar o campeonato e outros com aparência de quem, antes de pensar em objetivos maiores, vai precisar sobreviver a ele.",
+      "A tendência agora é ver quais equipes vão confirmar a boa impressão da estreia e quais conseguirão reagir rapidamente. Em campeonato de pontos corridos, largar mal não define tudo, mas quase sempre aumenta a pressão muito antes do que qualquer elenco gostaria."
+    ]
+  }
+];
+
+export function getAnaliseBySlug(slug) {
+  return analises.find((item) => item.slug === slug);
+}
+
+export function getFeaturedAnalise() {
+  return analises.find((item) => item.featured) || analises[0];
+}

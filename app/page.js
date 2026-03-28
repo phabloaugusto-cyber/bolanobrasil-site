@@ -1,0 +1,1574 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  buildLiveStandingsFromOfficial,
+  hasLiveMatches,
+} from "@/lib/classificacao-ao-vivo";
+
+function traduzirStatus(status) {
+  switch (status) {
+    case "TIMED":
+    case "SCHEDULED":
+      return "Agendado";
+    case "LIVE":
+      return "Ao vivo";
+    case "IN_PLAY":
+      return "Em andamento";
+    case "PAUSED":
+      return "Intervalo";
+    case "FINISHED":
+      return "Encerrado";
+    case "POSTPONED":
+      return "Adiado";
+    case "SUSPENDED":
+      return "Suspenso";
+    case "CANCELED":
+      return "Cancelado";
+    case "AWARDED":
+      return "Vitória administrativa";
+    default:
+      return status || "—";
+  }
+}
+
+function traduzirFaseAoVivo(status, minute) {
+  const minuto = typeof minute === "number" && minute > 0 ? `${minute}'` : null;
+
+  switch (status) {
+    case "LIVE":
+      return minuto ? `Ao vivo • ${minuto}` : "Ao vivo";
+    case "IN_PLAY":
+      return minuto ? `Em andamento • ${minuto}` : "Em andamento";
+    case "PAUSED":
+      return "Intervalo";
+    case "HT":
+      return "Intervalo";
+    case "1H":
+      return minuto ? `1º tempo • ${minuto}` : "1º tempo";
+    case "2H":
+      return minuto ? `2º tempo • ${minuto}` : "2º tempo";
+    case "ET":
+      return "Prorrogação";
+    case "BREAK":
+      return "Pausa";
+    case "PEN":
+      return "Pênaltis";
+    case "FT":
+      return "Encerrado";
+    default:
+      return traduzirStatus(status);
+  }
+}
+
+function formatarHoraBrasil(data) {
+  if (!data) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(data));
+}
+
+function getPlacarAtual(match) {
+  const home =
+    match?.score?.fullTime?.home ??
+    match?.score?.halfTime?.home ??
+    match?.score?.regularTime?.home ??
+    "-";
+
+  const away =
+    match?.score?.fullTime?.away ??
+    match?.score?.halfTime?.away ??
+    match?.score?.regularTime?.away ??
+    "-";
+
+  return `${home}-${away}`;
+}
+
+function formatarDataMudanca(dataStr) {
+  if (!dataStr) return "—";
+  const d = new Date(`${dataStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+}
+
+function getClubCrest(slug, apiCrest, teamName = "") {
+  const n = (teamName || "").toLowerCase();
+
+  if (
+    slug === "athletico-pr" ||
+    slug === "athletico" ||
+    n.includes("athletico") ||
+    n.includes("ath paranaense") ||
+    n.includes("atletico paranaense") ||
+    n.includes("paranaense") ||
+    n === "cap"
+  ) {
+    return "/escudos/athletico-pr.png";
+  }
+
+  return apiCrest || "";
+}
+
+export default function Home() {
+  const [clubes, setClubes] = useState([]);
+  const [meuTime, setMeuTime] = useState(null);
+  const [loadingClubes, setLoadingClubes] = useState(true);
+  const [modoTroca, setModoTroca] = useState(false);
+
+  const [matches, setMatches] = useState([]);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+
+  const [scorers, setScorers] = useState([]);
+  const [loadingScorers, setLoadingScorers] = useState(true);
+
+  const [recentGoals, setRecentGoals] = useState({});
+  const previousScoresRef = useRef({});
+  const [noticiasHome, setNoticiasHome] = useState([]);
+  const [featuredAnaliseHome, setFeaturedAnaliseHome] = useState(null);
+  const [featuredHumorHome, setFeaturedHumorHome] = useState(null);
+  const [featuredTecnicoHome, setFeaturedTecnicoHome] = useState(null);
+
+  const featuredAnalise = featuredAnaliseHome || null;
+  const featuredHumor = featuredHumorHome || null;
+
+  const ultimaMudancaTecnico = featuredTecnicoHome
+    ? {
+        clube: featuredTecnicoHome.club || "",
+        tecnicoAtual: featuredTecnicoHome.coach_in || "",
+        saida: featuredTecnicoHome.coach_out || "",
+        data:
+          featuredTecnicoHome.change_date ||
+          featuredTecnicoHome.published_at ||
+          featuredTecnicoHome.publishedAt ||
+          null,
+      }
+    : null;
+
+  useEffect(() => {
+    let ativo = true;
+
+    fetch("/api/home/noticias-do-dia", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!ativo) return;
+
+        const normalizadas = Array.isArray(data)
+          ? data.map((item) => ({
+              id: item.id,
+              slug: item.slug || "",
+              titulo: item.title || "",
+              title: item.title || "",
+              resumo: item.excerpt || "",
+              excerpt: item.excerpt || "",
+              conteudo: item.content || "",
+              content: item.content || "",
+              imagem: item.image_url || null,
+              image_url: item.image_url || null,
+              clube: item.club || null,
+              published_at: item.published_at || null,
+              publishedAt: item.published_at || null,
+            }))
+          : [];
+
+        setNoticiasHome(normalizadas);
+      })
+      .catch(() => {
+        if (ativo) {
+          setNoticiasHome([]);
+        }
+      });
+
+    fetch("/api/home/analises", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (ativo && data && !data.error) {
+          setFeaturedAnaliseHome(data);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/home/humor-na-rodada", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (ativo && data && !data.error) {
+          setFeaturedHumorHome(data);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/home/tecnicos", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (ativo && data && !data.error) {
+          setFeaturedTecnicoHome(data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  async function fetchMatchesSilencioso() {
+    try {
+      const res = await fetch("/api/matches?competition=BSA&season=2026", {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      const nextMatches = data?.matches || [];
+
+      const novosGols = {};
+
+      nextMatches.forEach((match) => {
+        const id = String(match.id);
+        const placarAtual = getPlacarAtual(match);
+        const placarAnterior = previousScoresRef.current[id];
+
+        if (
+          placarAnterior &&
+          placarAnterior !== placarAtual &&
+          (match.status === "LIVE" ||
+            match.status === "IN_PLAY" ||
+            match.status === "PAUSED")
+        ) {
+          novosGols[id] = Date.now();
+        }
+
+        previousScoresRef.current[id] = placarAtual;
+      });
+
+      if (Object.keys(novosGols).length > 0) {
+        setRecentGoals((prev) => ({ ...prev, ...novosGols }));
+      }
+
+      setMatches(nextMatches);
+    } catch (e) {
+      console.log("erro recarregar matches");
+    }
+  }
+
+  useEffect(() => {
+    async function loadClubes() {
+      try {
+        setLoadingClubes(true);
+        const res = await fetch("/api/standings?competition=BSA&season=2026", {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        const total = data?.standings?.find((s) => s.type === "TOTAL");
+        const table = total?.table || [];
+        const lista = table.map((row) => ({
+          id: row.team?.id,
+          nome: row.team?.shortName || row.team?.name || "Time",
+          slug: getClubSlug(row.team?.shortName || row.team?.name || ""),
+          escudo: getClubCrest(
+            getClubSlug(row.team?.shortName || row.team?.name || ""),
+            row.team?.crest,
+            row.team?.shortName || row.team?.name || ""
+          ),
+        }));
+
+        setClubes(lista);
+      } catch (e) {
+        console.log("erro clubes");
+      } finally {
+        setLoadingClubes(false);
+      }
+    }
+
+    async function loadMatches() {
+      try {
+        setLoadingMatches(true);
+        const res = await fetch("/api/matches?competition=BSA&season=2026", {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        const lista = data?.matches || [];
+
+        lista.forEach((match) => {
+          previousScoresRef.current[String(match.id)] = getPlacarAtual(match);
+        });
+
+        setMatches(lista);
+      } catch (e) {
+        console.log("erro matches");
+      } finally {
+        setLoadingMatches(false);
+      }
+    }
+
+    async function loadScorers() {
+      try {
+        setLoadingScorers(true);
+        const res = await fetch("/api/scorers?competition=BSA&season=2026", {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        setScorers(data?.scorers || []);
+      } catch (e) {
+        console.log("erro scorers");
+      } finally {
+        setLoadingScorers(false);
+      }
+    }
+
+    loadClubes();
+    loadMatches();
+    loadScorers();
+
+    const saved = localStorage.getItem("meuTime");
+    if (saved) {
+      try {
+        setMeuTime(JSON.parse(saved));
+      } catch (e) {
+        console.log("erro meuTime");
+      }
+    }
+  }, []);
+
+  function isTodayInBrazil(dateString) {
+    if (!dateString) return false;
+
+    const gameDate = new Date(dateString);
+    const today = new Date();
+
+    const gameParts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(gameDate);
+
+    const todayParts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(today);
+
+    return gameParts === todayParts;
+  }
+
+  function isReallyLive(match) {
+    const status = String(match?.status || "").toUpperCase();
+
+    const liveStatuses = ["LIVE", "IN_PLAY", "PAUSED", "1H", "2H", "ET", "PEN"];
+    if (!liveStatuses.includes(status)) return false;
+
+    const utcDate =
+      match?.utcDate ||
+      match?.date ||
+      match?.matchDate ||
+      match?.scheduled_at ||
+      "";
+
+    return isTodayInBrazil(utcDate);
+  }
+
+  const today = useMemo(() => {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }, []);
+
+  const liveMatches = useMemo(() => {
+    return matches.filter((m) => isReallyLive(m));
+  }, [matches]);
+
+  const todayMatches = useMemo(() => {
+    return matches
+      .filter((m) => {
+        const matchDate = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Sao_Paulo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date(m.utcDate));
+
+        return matchDate === today;
+      })
+      .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+  }, [matches, today]);
+
+  const hasLiveNow = liveMatches.length > 0;
+  const hasTodayMatches = todayMatches.length > 0;
+
+  useEffect(() => {
+    let intervalo = 45000;
+
+    if (hasLiveNow) {
+      intervalo = 5000;
+    } else if (hasTodayMatches) {
+      intervalo = 20000;
+    }
+
+    const timer = setInterval(() => {
+      fetchMatchesSilencioso();
+    }, intervalo);
+
+    return () => clearInterval(timer);
+  }, [hasLiveNow, hasTodayMatches]);
+
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      setRecentGoals((prev) => {
+        const now = Date.now();
+        const next = {};
+
+        Object.entries(prev).forEach(([id, timestamp]) => {
+          if (now - timestamp < 12000) {
+            next[id] = timestamp;
+          }
+        });
+
+        return next;
+      });
+    }, 3000);
+
+    return () => clearInterval(cleanup);
+  }, []);
+
+  const topScorers = useMemo(() => scorers.slice(0, 5), [scorers]);
+
+  function salvarTime(clube) {
+    localStorage.setItem("meuTime", JSON.stringify(clube));
+    setMeuTime(clube);
+    setModoTroca(false);
+  }
+
+  function removerTime() {
+    localStorage.removeItem("meuTime");
+    setMeuTime(null);
+    setModoTroca(false);
+  }
+
+  return (
+    <main style={styles.container}>
+      <div style={styles.brandWrap}>
+        <img
+          src="/logo-header-bolanobrasil.png"
+          alt="BolaNoBrasil"
+          style={styles.brandLogo}
+        />
+        <p style={styles.brandSubtitle}>Brasileirão Série A</p>
+      </div>
+
+      {meuTime && (
+        <div style={styles.meuTimeBox}>
+          <div style={styles.meuTimeHeader}>
+            <span style={styles.meuTimeTitle}>⭐ Meu time</span>
+
+            <div style={styles.meuTimeActions}>
+              {modoTroca && (
+                <button onClick={removerTime} style={styles.removerBtn}>
+                  remover
+                </button>
+              )}
+
+              <button onClick={() => setModoTroca(true)} style={styles.trocarBtn}>
+                trocar
+              </button>
+            </div>
+          </div>
+
+          <Link href={`/time/${meuTime.slug}`} style={styles.meuTimeLink}>
+            <img
+              src={meuTime.escudo}
+              alt={meuTime.nome}
+              style={styles.meuTimeLogo}
+            />
+            <span style={styles.meuTimeName}>{meuTime.nome}</span>
+          </Link>
+        </div>
+      )}
+
+      <section style={{ ...styles.sectionCard, ...styles.sectionLive }}>
+        <div style={styles.sectionHeader}>
+          <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleLive }}>
+            Jogos ao vivo
+          </h2>
+          <Link href="/ao-vivo" style={{ ...styles.sectionLink, ...styles.sectionLinkLive }}>
+            ver mais
+          </Link>
+        </div>
+
+        {loadingMatches ? (
+          <p style={styles.loadingText}>Carregando jogos ao vivo...</p>
+        ) : liveMatches.length === 0 ? (
+          <div style={styles.emptyCard}>Nenhum jogo ao vivo agora.</div>
+        ) : (
+          <div style={styles.matchesList}>
+            {liveMatches.map((m) => {
+              const isGolRecente = !!recentGoals[String(m.id)];
+
+              return (
+                <div
+                  key={m.id}
+                  style={{
+                    ...styles.liveMatchCard,
+                    ...(isGolRecente ? styles.liveMatchCardGol : {}),
+                  }}
+                >
+                  <div style={styles.matchMeta}>
+                    <div style={styles.liveMetaLeft}>
+                      <span style={styles.liveBadge}>AO VIVO</span>
+                      {isGolRecente && <span style={styles.goalBadge}>GOL</span>}
+                    </div>
+
+                    <span style={styles.matchStatus}>
+                      {traduzirFaseAoVivo(m.status, m.minute)}
+                    </span>
+                  </div>
+
+                  <div style={styles.teamRow}>
+                    <span style={styles.teamName}>
+                      {m.homeTeam?.shortName || m.homeTeam?.name}
+                    </span>
+                    <strong style={styles.scoreValue}>
+                      {m.score?.fullTime?.home ??
+                        m.score?.halfTime?.home ??
+                        m.score?.regularTime?.home ??
+                        "-"}
+                    </strong>
+                  </div>
+
+                  <div style={styles.teamRow}>
+                    <span style={styles.teamName}>
+                      {m.awayTeam?.shortName || m.awayTeam?.name}
+                    </span>
+                    <strong style={styles.scoreValue}>
+                      {m.score?.fullTime?.away ??
+                        m.score?.halfTime?.away ??
+                        m.score?.regularTime?.away ??
+                        "-"}
+                    </strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section style={{ ...styles.sectionCard, ...styles.sectionToday }}>
+        <div style={styles.sectionHeader}>
+          <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleToday }}>
+            Jogos de hoje
+          </h2>
+          <Link href="/jogos-hoje" style={{ ...styles.sectionLink, ...styles.sectionLinkToday }}>
+            ver mais
+          </Link>
+        </div>
+
+        {loadingMatches ? (
+          <p style={styles.loadingText}>Carregando jogos de hoje...</p>
+        ) : todayMatches.length === 0 ? (
+          <div style={styles.emptyCard}>Nenhum jogo hoje.</div>
+        ) : (
+          <div style={styles.matchesList}>
+            {todayMatches.slice(0, 6).map((m) => (
+              <div key={m.id} style={styles.matchCard}>
+                <div style={styles.matchMeta}>
+                  <span>{formatarHoraBrasil(m.utcDate)}</span>
+                  <span style={styles.matchStatus}>{traduzirStatus(m.status)}</span>
+                </div>
+
+                <div style={styles.teamRow}>
+                  <span style={styles.teamName}>
+                    {m.homeTeam?.shortName || m.homeTeam?.name}
+                  </span>
+                  <strong style={styles.scoreValue}>
+                    {m.score?.fullTime?.home ?? "-"}
+                  </strong>
+                </div>
+
+                <div style={styles.teamRow}>
+                  <span style={styles.teamName}>
+                    {m.awayTeam?.shortName || m.awayTeam?.name}
+                  </span>
+                  <strong style={styles.scoreValue}>
+                    {m.score?.fullTime?.away ?? "-"}
+                  </strong>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {featuredAnalise && (
+        <section style={{ ...styles.sectionCard, ...styles.sectionAnalysis }}>
+          <div style={styles.sectionHeader}>
+            <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleAnalysis }}>
+              Análise em destaque
+            </h2>
+            <Link href="/analises" style={{ ...styles.sectionLink, ...styles.sectionLinkAnalysis }}>
+              ver todas
+            </Link>
+          </div>
+
+          <article style={styles.analysisCard}>
+            <div style={styles.analysisBadgeRow}>
+              <span style={styles.analysisBadge}>{featuredAnalise.category}</span>
+              <span style={styles.analysisDate}>{featuredAnalise.date}</span>
+            </div>
+
+            <h3 style={styles.analysisTitle}>{featuredAnalise.title}</h3>
+            <p style={styles.analysisExcerpt}>{featuredAnalise.excerpt}</p>
+
+            <div style={styles.analysisFooter}>
+              <span style={styles.analysisAuthor}>{featuredAnalise.author}</span>
+
+              <Link
+                href={`/analises/${featuredAnalise.slug}`}
+                style={styles.analysisButton}
+              >
+                Ler análise
+              </Link>
+            </div>
+          </article>
+        </section>
+      )}
+
+      <div style={styles.ad}>
+        <span style={styles.adLabel}>Publicidade</span>
+        Espaço para anúncio
+      </div>
+
+      {featuredHumor && (
+        <section style={styles.sectionBlock}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitleCompact}>Humor na Rodada</h2>
+            <Link href="/humor-na-rodada" style={styles.sectionLink}>
+              ver editoria
+            </Link>
+          </div>
+
+          <article style={styles.humorCard}>
+            <div style={styles.humorBadgeRow}>
+              <span style={styles.humorBadge}>Humor na Rodada</span>
+              <span style={styles.humorDate}>{featuredHumor.date}</span>
+            </div>
+
+            <h3 style={styles.humorTitle}>{featuredHumor.title}</h3>
+            <p style={styles.humorExcerpt}>{featuredHumor.excerpt}</p>
+
+            <div style={styles.humorFooter}>
+              <span style={styles.humorAuthor}>{featuredHumor.author}</span>
+
+              <Link
+                href={`/humor-na-rodada/${featuredHumor.slug}`}
+                style={styles.humorButton}
+              >
+                Ler texto
+              </Link>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {noticiasHome.length > 0 && (
+        <section style={{ ...styles.sectionCard, ...styles.sectionNoticias }}>
+          <div style={styles.sectionHeader}>
+            <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleNoticias }}>
+              Notícias do Dia
+            </h2>
+            <Link
+              href="/noticias-do-dia"
+              style={{ ...styles.sectionLink, ...styles.sectionLinkNoticias }}
+            >
+              ver editoria
+            </Link>
+          </div>
+
+          <div style={styles.newsHomeList}>
+            {noticiasHome.map((item) => (
+              <Link
+                key={item.slug}
+                href={`/noticias-do-dia/${item.slug}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <article style={styles.newsHomeCard}>
+                  <div style={styles.newsHomeMetaRow}>
+                    <span style={styles.newsHomeBadge}>Notícias do Dia</span>
+                    <span style={styles.newsHomeDate}>
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        timeZone: "America/Sao_Paulo",
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(item.publishedAt))}
+                    </span>
+                  </div>
+
+                  <h3 style={styles.newsHomeTitle}>{item.title}</h3>
+                  <p style={styles.newsHomeExcerpt}>{item.excerpt}</p>
+
+                  <div style={styles.newsHomeFooter}>
+                    <span style={styles.newsHomeAuthor}>{item.author}</span>
+
+                    <span style={styles.newsHomeButton}>Ler notícia</span>
+                  </div>
+                </article>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section style={{ ...styles.sectionCard, ...styles.sectionClubes }}>
+        <div style={styles.sectionHeader}>
+          <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleClubes }}>
+            {modoTroca ? "Escolha o novo time favorito" : "Escolha seu time"}
+          </h2>
+        </div>
+
+        {modoTroca && (
+          <p style={styles.loadingText}>
+            Toque em um escudo para trocar seu time favorito.
+          </p>
+        )}
+
+        <div style={styles.clubGrid}>
+          {loadingClubes ? (
+            <p style={styles.loadingText}>Carregando clubes...</p>
+          ) : (
+            clubes.map((clube) => (
+              <Link
+                key={clube.id || clube.slug}
+                href={`/time/${clube.slug}`}
+                style={styles.clubCard}
+                onClick={() => {
+                  if (!meuTime || modoTroca) {
+                    salvarTime(clube);
+                  }
+                }}
+                title={clube.nome}
+              >
+                <img
+                  src={clube.escudo}
+                  alt={clube.nome}
+                  style={styles.clubLogo}
+                />
+              </Link>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section style={{ ...styles.sectionCard, ...styles.sectionScorers }}>
+        <div style={styles.sectionHeader}>
+          <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleScorers }}>
+            Artilheiros
+          </h2>
+          <Link href="/artilheiros" style={{ ...styles.sectionLink, ...styles.sectionLinkScorers }}>
+            ver ranking
+          </Link>
+        </div>
+
+        {loadingScorers ? (
+          <p style={styles.loadingText}>Carregando artilheiros...</p>
+        ) : topScorers.length === 0 ? (
+          <div style={styles.emptyCard}>Sem dados de artilharia.</div>
+        ) : (
+          <div style={styles.scorersList}>
+            {topScorers.map((p, index) => (
+              <div key={p.player?.id || index} style={styles.scorerItem}>
+                <div style={styles.scorerRank}>{index + 1}</div>
+                <div style={styles.scorerMain}>
+                  <div style={styles.scorerName}>{p.player?.name || "—"}</div>
+                  <div style={styles.scorerTeam}>
+                    {p.team?.shortName || p.team?.name || "Sem time"}
+                  </div>
+                </div>
+                <div style={styles.scorerGoals}>{p.goals ?? 0}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {ultimaMudancaTecnico && (
+        <section style={{ ...styles.sectionCard, ...styles.sectionTecnicos }}>
+          <div style={styles.sectionHeader}>
+            <h2 style={{ ...styles.sectionTitleCompact, ...styles.sectionTitleTecnicos }}>
+              Última mudança de técnico
+            </h2>
+            <Link href="/tecnicos" style={{ ...styles.sectionLink, ...styles.sectionLinkTecnicos }}>
+              ver todas
+            </Link>
+          </div>
+
+          <Link href="/tecnicos" style={styles.tecnicosHighlightCard}>
+            <div style={styles.tecnicosHighlightClub}>
+              {ultimaMudancaTecnico.clube || "Mudança de técnico"}
+            </div>
+
+            <div style={styles.tecnicosHighlightTitle}>
+              {ultimaMudancaTecnico.tecnicoAtual
+                ? `${ultimaMudancaTecnico.tecnicoAtual} assumiu`
+                : "Mudança registrada"}
+            </div>
+
+            <div style={styles.tecnicosHighlightText}>
+              {ultimaMudancaTecnico.tecnicoAtual && ultimaMudancaTecnico.saida
+                ? `Entrou após a saída de ${ultimaMudancaTecnico.saida}.`
+                : "Mudança registrada no clube."}
+            </div>
+
+            <div style={styles.tecnicosHighlightFooter}>
+              <span style={styles.tecnicosHighlightDate}>
+                {ultimaMudancaTecnico.data
+                  ? formatarDataMudanca(ultimaMudancaTecnico.data)
+                  : "—"}
+              </span>
+              <span style={styles.tecnicosHighlightArrow}>
+                Ver histórico completo →
+              </span>
+            </div>
+          </Link>
+        </section>
+      )}
+
+      <div style={styles.adSecondary}>
+        <span style={styles.adLabel}>Publicidade</span>
+        Espaço para anúncio
+      </div>
+
+      <div style={styles.bottomNav}>
+        <Link href="/tabela" style={styles.bottomNavItem}>
+          Tabela
+        </Link>
+        <Link href="/jogos" style={styles.bottomNavItem}>
+          Jogos
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+function getClubSlug(name) {
+  const n = (name || "").toLowerCase();
+
+  if (n.includes("flamengo")) return "flamengo";
+  if (n.includes("palmeiras")) return "palmeiras";
+  if (n.includes("corinthians")) return "corinthians";
+  if (n.includes("são paulo") || n.includes("sao paulo")) return "sao-paulo";
+  if (n.includes("santos")) return "santos";
+  if (n.includes("vasco")) return "vasco";
+  if (n.includes("botafogo")) return "botafogo";
+  if (n.includes("fluminense")) return "fluminense";
+  if (n.includes("grêmio") || n.includes("gremio")) return "gremio";
+  if (n.includes("internacional")) return "internacional";
+  if (n.includes("atlético mineiro") || n.includes("atletico mineiro"))
+    return "atletico-mg";
+  if (
+    n.includes("athletico") ||
+    n.includes("ath paranaense") ||
+    n.includes("atletico paranaense")
+  )
+    return "athletico-pr";
+  if (n.includes("cruzeiro")) return "cruzeiro";
+  if (n.includes("coritiba")) return "coritiba";
+  if (n.includes("bahia")) return "bahia";
+  if (n.includes("fortaleza")) return "fortaleza";
+  if (n.includes("ceará") || n.includes("ceara")) return "ceara";
+  if (n.includes("bragantino")) return "bragantino";
+  if (n.includes("goiás") || n.includes("goias")) return "goias";
+  if (n.includes("cuiabá") || n.includes("cuiaba")) return "cuiaba";
+  if (n.includes("mirassol")) return "mirassol";
+  if (n.includes("remo")) return "remo";
+  if (n.includes("chapecoense")) return "chapecoense";
+  if (n.includes("vitória") || n.includes("vitoria")) return "vitoria";
+
+  return n
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\./g, "")
+    .replace(/\s+/g, "-");
+}
+
+const styles = {
+  container: {
+    maxWidth: 980,
+    margin: "0 auto",
+    padding: "0 20px 190px 20px",
+    color: "#f5f7fb",
+    fontFamily: "Arial, sans-serif",
+  },
+  brandWrap: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  brandLogo: {
+    width: "100%",
+    maxWidth: 240,
+    height: "auto",
+    display: "block",
+    margin: "0 auto 2px auto",
+  },
+  brandSubtitle: {
+    marginTop: 0,
+    marginBottom: 0,
+    color: "#b8c2cc",
+    fontSize: 14,
+    lineHeight: 1.1,
+  },
+  sectionCard: {
+    marginTop: 28,
+    background: "#09111d",
+    borderRadius: 22,
+    padding: 18,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 12px 34px rgba(0,0,0,0.20)",
+    position: "relative",
+    overflow: "hidden",
+  },
+  sectionLive: {
+    borderTop: "3px solid rgba(255,90,90,0.75)",
+  },
+  sectionToday: {
+    borderTop: "3px solid rgba(96,165,250,0.78)",
+  },
+  sectionAnalysis: {
+    borderTop: "3px solid rgba(167,139,250,0.82)",
+  },
+  sectionNoticias: {
+    borderTop: "3px solid rgba(125,211,252,0.82)",
+  },
+  sectionTitleNoticias: {
+    color: "#d7f0ff",
+  },
+  sectionLinkNoticias: {
+    color: "#8fd8ff",
+  },
+  sectionClubes: {
+    borderTop: "3px solid rgba(250,204,21,0.82)",
+  },
+  sectionScorers: {
+    borderTop: "3px solid rgba(74,222,128,0.82)",
+  },
+  sectionTecnicos: {
+    borderTop: "3px solid rgba(251,146,60,0.82)",
+  },
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  sectionTitleCompact: {
+    margin: 0,
+    fontSize: 22,
+    letterSpacing: "-0.01em",
+  },
+  sectionTitleLive: {
+    color: "#ffb4b4",
+  },
+  sectionTitleToday: {
+    color: "#b8d8ff",
+  },
+  sectionTitleAnalysis: {
+    color: "#d8c8ff",
+  },
+  sectionTitleClubes: {
+    color: "#ffe58b",
+  },
+  sectionTitleScorers: {
+    color: "#baf4c9",
+  },
+  sectionTitleTecnicos: {
+    color: "#ffd1a3",
+  },
+  sectionLink: {
+    textDecoration: "none",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  sectionLinkLive: {
+    color: "#ffb4b4",
+  },
+  sectionLinkToday: {
+    color: "#b8d8ff",
+  },
+  sectionLinkAnalysis: {
+    color: "#d8c8ff",
+  },
+  sectionLinkClubes: {
+    color: "#ffe58b",
+  },
+  sectionLinkScorers: {
+    color: "#baf4c9",
+  },
+  sectionLinkTecnicos: {
+    color: "#ffd1a3",
+  },
+  loadingText: {
+    opacity: 0.8,
+    margin: 0,
+    color: "#b8c2cc",
+  },
+  clubGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gap: "10px",
+  },
+  clubCard: {
+    background: "#0d1726",
+    borderRadius: 14,
+    padding: 10,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 62,
+    border: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+  },
+  clubLogo: {
+    width: "34px",
+    height: "34px",
+    objectFit: "contain",
+  },
+  matchesList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  liveMatchCard: {
+    background: "linear-gradient(180deg, #101d31 0%, #0d1726 100%)",
+    borderRadius: 16,
+    padding: 16,
+    border: "1px solid rgba(255,80,80,0.16)",
+    boxShadow: "0 8px 28px rgba(0,0,0,0.20)",
+  },
+  liveMatchCardGol: {
+    border: "1px solid rgba(255,180,70,0.65)",
+    boxShadow:
+      "0 0 0 1px rgba(255,180,70,0.18), 0 10px 30px rgba(255,180,70,0.16)",
+  },
+  matchCard: {
+    background: "#0d1726",
+    borderRadius: 16,
+    padding: 16,
+    border: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+  },
+  matchMeta: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+    color: "#b8c2cc",
+    fontSize: 13,
+    gap: 10,
+  },
+  liveMetaLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  liveBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(255,90,90,0.12)",
+    color: "#ff9b9b",
+    border: "1px solid rgba(255,90,90,0.25)",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  goalBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(255,190,60,0.16)",
+    color: "#ffd56b",
+    border: "1px solid rgba(255,190,60,0.32)",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  matchStatus: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "right",
+  },
+  teamRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    padding: "8px 0",
+  },
+  teamName: {
+    fontSize: 17,
+    fontWeight: 700,
+    color: "#f8fafc",
+  },
+  scoreValue: {
+    fontSize: 20,
+    fontWeight: 800,
+    minWidth: 22,
+    textAlign: "right",
+    color: "#ffffff",
+  },
+  emptyCard: {
+    background: "#0d1726",
+    borderRadius: 16,
+    padding: 18,
+    color: "#b8c2cc",
+    border: "1px solid rgba(255,255,255,0.05)",
+  },
+  analysisCard: {
+    background: "linear-gradient(180deg, #101d31 0%, #0d1726 100%)",
+    borderRadius: 18,
+    padding: 18,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
+  },
+  analysisBadgeRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+  analysisBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(59,130,246,0.12)",
+    color: "#93c5fd",
+    border: "1px solid rgba(59,130,246,0.22)",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  analysisDate: {
+    color: "#94a3b8",
+    fontSize: 13,
+  },
+  analysisTitle: {
+    margin: "0 0 12px 0",
+    fontSize: 22,
+    lineHeight: 1.25,
+    letterSpacing: "-0.02em",
+  },
+  analysisExcerpt: {
+    margin: 0,
+    color: "#cbd5e1",
+    fontSize: 15,
+    lineHeight: 1.7,
+  },
+  analysisFooter: {
+    marginTop: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  analysisAuthor: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  analysisButton: {
+    textDecoration: "none",
+    background: "#16304f",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  humorCard: {
+    background: "linear-gradient(180deg, #1a1209 0%, #0d1726 100%)",
+    borderRadius: 18,
+    padding: 18,
+    border: "1px solid rgba(255,166,77,0.16)",
+    boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
+  },
+  humorBadgeRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+  humorBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(255,166,77,0.12)",
+    color: "#ffd1a3",
+    border: "1px solid rgba(255,166,77,0.22)",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  humorDate: {
+    color: "#c7a789",
+    fontSize: 13,
+  },
+  humorTitle: {
+    margin: "0 0 12px 0",
+    fontSize: 22,
+    lineHeight: 1.25,
+    letterSpacing: "-0.02em",
+  },
+  humorExcerpt: {
+    margin: 0,
+    color: "#f1dcc8",
+    fontSize: 15,
+    lineHeight: 1.7,
+  },
+  humorFooter: {
+    marginTop: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  humorAuthor: {
+    color: "#c7a789",
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  humorButton: {
+    textDecoration: "none",
+    background: "#4a2a12",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  newsHomeList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  newsHomeCard: {
+    background: "#0d1726",
+    borderRadius: 16,
+    padding: 16,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+  },
+  newsHomeMetaRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+  newsHomeBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(125,211,252,0.10)",
+    color: "#d7f0ff",
+    border: "1px solid rgba(125,211,252,0.20)",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.04em",
+  },
+  newsHomeDate: {
+    color: "#a9bdd6",
+    fontSize: 13,
+  },
+  newsHomeTitle: {
+    margin: "0 0 12px 0",
+    fontSize: 22,
+    lineHeight: 1.25,
+    letterSpacing: "-0.02em",
+  },
+  newsHomeExcerpt: {
+    margin: 0,
+    color: "#d9e6f5",
+    fontSize: 15,
+    lineHeight: 1.7,
+  },
+  newsHomeFooter: {
+    marginTop: 18,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  newsHomeAuthor: {
+    color: "#a9bdd6",
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  newsHomeButton: {
+    textDecoration: "none",
+    background: "#17385a",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  ad: {
+    marginTop: 24,
+    minHeight: 90,
+    borderRadius: 16,
+    border: "1px dashed rgba(255,255,255,0.14)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    background: "rgba(255,255,255,0.02)",
+    gap: 6,
+  },
+  adSecondary: {
+    marginTop: 24,
+    marginBottom: 18,
+    minHeight: 90,
+    borderRadius: 16,
+    border: "1px dashed rgba(255,255,255,0.14)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94a3b8",
+    background: "rgba(255,255,255,0.02)",
+    gap: 6,
+  },
+  adLabel: {
+    textTransform: "uppercase",
+    fontSize: 12,
+    letterSpacing: "0.08em",
+    opacity: 0.7,
+  },
+  meuTimeBox: {
+    marginTop: 18,
+    background: "#0d1726",
+    borderRadius: 20,
+    padding: 18,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  },
+  meuTimeHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  meuTimeTitle: {
+    fontSize: 20,
+    fontWeight: 800,
+    letterSpacing: "-0.02em",
+  },
+  meuTimeActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+  },
+  trocarBtn: {
+    background: "#1d2f4d",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 16,
+    padding: "10px 16px",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+  removerBtn: {
+    background: "transparent",
+    color: "#fda4af",
+    border: "1px solid rgba(253,164,175,0.24)",
+    borderRadius: 16,
+    padding: "10px 14px",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+  meuTimeLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    textDecoration: "none",
+    color: "#fff",
+  },
+  meuTimeLogo: {
+    width: 52,
+    height: 52,
+    objectFit: "contain",
+  },
+  meuTimeName: {
+    fontSize: 24,
+    fontWeight: 800,
+    letterSpacing: "-0.02em",
+  },
+  scorersList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  scorerItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    background: "#0d1726",
+    borderRadius: 14,
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.05)",
+  },
+  scorerRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#17263f",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#cbd5e1",
+    flexShrink: 0,
+  },
+  scorerMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scorerName: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#f8fafc",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  scorerTeam: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#94a3b8",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  scorerGoals: {
+    minWidth: 34,
+    textAlign: "right",
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#fff",
+  },
+  tecnicosHighlightCard: {
+    display: "block",
+    textDecoration: "none",
+    background: "linear-gradient(180deg, #101d31 0%, #0d1726 100%)",
+    border: "1px solid rgba(251,146,60,0.18)",
+    borderRadius: 18,
+    padding: 18,
+    color: "#f5f7fb",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  },
+  tecnicosHighlightClub: {
+    color: "#ffcc9d",
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: "0.04em",
+    marginBottom: 8,
+  },
+  tecnicosHighlightTitle: {
+    fontSize: 22,
+    fontWeight: 900,
+    lineHeight: 1.15,
+    marginBottom: 8,
+    color: "#ffffff",
+  },
+  tecnicosHighlightText: {
+    color: "#b8c2cc",
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  tecnicosHighlightFooter: {
+    marginTop: 14,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  tecnicosHighlightDate: {
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  tecnicosHighlightArrow: {
+    color: "#ffd1a3",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  bottomNav: {
+    position: "fixed",
+    left: "50%",
+    transform: "translateX(-50%)",
+    bottom: 14,
+    width: "min(92%, 560px)",
+    background: "rgba(8,14,26,0.90)",
+    backdropFilter: "blur(14px)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: 22,
+    padding: 10,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+    boxShadow: "0 14px 34px rgba(0,0,0,0.30)",
+    zIndex: 50,
+  },
+  bottomNavItem: {
+    textDecoration: "none",
+    background: "linear-gradient(180deg, #12233c 0%, #0f1d31 100%)",
+    color: "#f8fafc",
+    textAlign: "center",
+    padding: "13px 10px",
+    borderRadius: 16,
+    fontWeight: 800,
+    fontSize: 16,
+    border: "1px solid rgba(255,255,255,0.07)",
+    letterSpacing: "-0.01em",
+  },
+};
