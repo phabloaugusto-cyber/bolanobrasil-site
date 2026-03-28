@@ -55,13 +55,14 @@ const styles = {
     borderRadius: 999,
     fontSize: 12,
     fontWeight: 800,
-    background: "rgba(143,199,255,0.14)",
-    color: "#d7ecff",
+    background: "rgba(59,130,246,0.12)",
+    color: "#93c5fd",
+    border: "1px solid rgba(59,130,246,0.22)",
     marginBottom: 10,
   },
   cardTitle: {
     margin: "0 0 8px",
-    fontSize: 24,
+    fontSize: 22,
     lineHeight: 1.15,
   },
   excerpt: {
@@ -107,22 +108,20 @@ function formatDate(value) {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     }).format(new Date(value));
   } catch {
     return "";
   }
 }
 
-export default function AnalisesPage() {
+export default function AnalisesTimesPage() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let ativo = true;
 
-    fetch("/api/posts?type=analise&club=null", { cache: "no-store" })
+    fetch("/api/posts?type=analise&club=has", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (!ativo) return;
@@ -147,9 +146,9 @@ export default function AnalisesPage() {
       <div style={styles.container}>
         <div style={styles.header}>
           <div>
-            <h1 style={styles.title}>Análises por Rodada</h1>
+            <h1 style={styles.title}>Análises por Time</h1>
             <p style={styles.subtitle}>
-              Análises completas de cada rodada do Brasileirão.
+              Análises individuais de cada clube no Brasileirão.
             </p>
           </div>
           <Link href="/" style={styles.backLink}>
@@ -166,7 +165,7 @@ export default function AnalisesPage() {
             {posts.map((item) => (
               <div key={item.id || item.slug} style={styles.card}>
                 <span style={styles.badge}>
-                  {item.round ? `${item.round}ª Rodada` : "Análise"}
+                  {item.club || "Análise de clube"}
                 </span>
                 <h2 style={styles.cardTitle}>{item.title || item.titulo}</h2>
                 <p style={styles.excerpt}>{item.excerpt || item.resumo}</p>
@@ -174,7 +173,10 @@ export default function AnalisesPage() {
                   <span style={styles.date}>
                     {formatDate(item.publishedAt || item.published_at)}
                   </span>
-                  <Link href={`/analises/${item.slug}`} style={styles.button}>
+                  <Link
+                    href={`/analises-times/${item.slug}`}
+                    style={styles.button}
+                  >
                     Ler análise
                   </Link>
                 </div>

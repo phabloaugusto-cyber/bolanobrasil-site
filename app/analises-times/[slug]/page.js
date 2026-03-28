@@ -1,50 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getAnaliseTimeBySlug } from "../../../lib/analises-times";
-
-export default function AnaliseTimeDetalhePage({ params }) {
-  const analise = getAnaliseTimeBySlug(params.slug);
-
-  if (!analise) {
-    notFound();
-  }
-
-  return (
-    <main style={styles.container}>
-      <div style={styles.topNav}>
-        <Link href="/" style={styles.topLink}>
-          ← Início
-        </Link>
-
-        <Link href={`/time/${params.slug}`} style={styles.topLinkSecondary}>
-          Voltar para o time
-        </Link>
-      </div>
-
-      <article style={styles.article}>
-        <div style={styles.metaRow}>
-          <span style={styles.badge}>Análise de clube</span>
-          <span style={styles.date}>{analise.date}</span>
-        </div>
-
-        <h1 style={styles.title}>{analise.title}</h1>
-        <p style={styles.excerpt}>{analise.excerpt}</p>
-
-        <div style={styles.authorRow}>
-          <span style={styles.author}>{analise.author}</span>
-        </div>
-
-        <div style={styles.content}>
-          {analise.content.map((paragraph, index) => (
-            <p key={index} style={styles.paragraph}>
-              {paragraph}
-            </p>
-          ))}
-        </div>
-      </article>
-    </main>
-  );
-}
+import { useParams } from "next/navigation";
 
 const styles = {
   container: {
@@ -98,43 +56,147 @@ const styles = {
     border: "1px solid rgba(59,130,246,0.22)",
     borderRadius: 999,
     padding: "6px 10px",
-    fontWeight: 700,
     fontSize: 12,
-    letterSpacing: "0.04em",
+    fontWeight: 800,
   },
   date: {
     color: "#94a3b8",
     fontSize: 13,
+    fontWeight: 600,
   },
   title: {
-    margin: 0,
+    margin: "0 0 10px",
     fontSize: 34,
-    lineHeight: 1.1,
-    letterSpacing: "-0.03em",
+    lineHeight: 1.12,
   },
   excerpt: {
-    margin: "14px 0 0 0",
-    color: "#cbd5e1",
+    margin: "0 0 14px",
+    color: "#d7deed",
     fontSize: 18,
-    lineHeight: 1.6,
-  },
-  authorRow: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTop: "1px solid rgba(255,255,255,0.08)",
+    lineHeight: 1.55,
   },
   author: {
     color: "#94a3b8",
-    fontSize: 14,
-    fontWeight: 600,
-  },
-  content: {
-    marginTop: 24,
+    fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 22,
   },
   paragraph: {
-    margin: "0 0 18px 0",
-    color: "#f1f5f9",
+    margin: "0 0 18px",
+    lineHeight: 1.75,
     fontSize: 18,
-    lineHeight: 1.85,
+    color: "#f2f5fb",
+  },
+  loading: {
+    color: "#d7deed",
+    textAlign: "center",
+    padding: "40px 0",
   },
 };
+
+function formatDate(value) {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+function splitParagraphs(content) {
+  if (Array.isArray(content)) {
+    return content.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (!content) return [];
+  return String(content)
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export default function AnaliseTimeDetalhePage() {
+  const params = useParams();
+  const slug = params?.slug;
+
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!slug) return;
+
+    let ativo = true;
+
+    fetch(`/api/posts/${slug}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!ativo) return;
+        if (data && !data.error) {
+          setPost(data);
+        } else {
+          setPost(null);
+        }
+      })
+      .catch(() => {
+        if (!ativo) return;
+        setPost(null);
+      })
+      .finally(() => {
+        if (!ativo) return;
+        setLoading(false);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [slug]);
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.topNav}>
+        <Link href="/" style={styles.topLink}>
+          ← Início
+        </Link>
+        <Link href="/analises-times" style={styles.topLinkSecondary}>
+          Voltar para análises de times
+        </Link>
+      </div>
+
+      {loading ? (
+        <div style={styles.loading}>
+          <p>Carregando análise...</p>
+        </div>
+      ) : !post ? (
+        <div style={styles.loading}>
+          <p>Análise não encontrada.</p>
+        </div>
+      ) : (
+        <article style={styles.article}>
+          <div style={styles.metaRow}>
+            <span style={styles.badge}>
+              {post.club || "Análise de clube"}
+            </span>
+            <span style={styles.date}>
+              {formatDate(post.published_at || post.publishedAt)}
+            </span>
+          </div>
+          <h1 style={styles.title}>{post.title || post.titulo}</h1>
+          <p style={styles.excerpt}>{post.excerpt || post.resumo}</p>
+          <p style={styles.author}>Redação BolaNoBrasil</p>
+
+          {splitParagraphs(post.content || post.conteudo).map(
+            (paragraph, index) => (
+              <p key={index} style={styles.paragraph}>
+                {paragraph}
+              </p>
+            )
+          )}
+        </article>
+      )}
+    </div>
+  );
+}
