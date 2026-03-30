@@ -155,7 +155,7 @@ export default function Home() {
   useEffect(() => {
     let ativo = true;
 
-    fetch(`/api/home/noticias-do-dia?t=${Date.now()}`, { cache: "no-store" })
+    fetch("/api/home/noticias-do-dia", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (!ativo) return;
@@ -186,7 +186,7 @@ export default function Home() {
         }
       });
 
-    fetch(`/api/home/analises?t=${Date.now()}`, { cache: "no-store" })
+    fetch("/api/home/analises", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (ativo && data && !data.error) {
@@ -195,7 +195,7 @@ export default function Home() {
       })
       .catch(() => {});
 
-    fetch(`/api/home/humor-na-rodada?t=${Date.now()}`, { cache: "no-store" })
+    fetch("/api/home/humor-na-rodada", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (ativo && data && !data.error) {
@@ -204,7 +204,7 @@ export default function Home() {
       })
       .catch(() => {});
 
-    fetch(`/api/home/tecnicos?t=${Date.now()}`, { cache: "no-store" })
+    fetch("/api/home/tecnicos", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (ativo && data && !data.error) {
@@ -456,84 +456,6 @@ export default function Home() {
 
   return (
     <main style={styles.container}>
-
-      <Link
-        href="/copa-do-mundo"
-        style={{
-          textDecoration: "none",
-          display: "block",
-          marginBottom: 20,
-        }}
-      >
-        <section
-          style={{
-            position: "relative",
-            overflow: "hidden",
-            borderRadius: 26,
-            padding: "26px 20px",
-            background:
-              "linear-gradient(135deg, rgba(19,44,99,0.98) 0%, rgba(10,10,10,0.98) 78%)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "0 18px 46px rgba(0,0,0,0.32)",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 26,
-              padding: 1.5,
-              background:
-                "linear-gradient(90deg, rgba(244,196,0,0.95) 0%, rgba(214,168,0,0.95) 42%, rgba(23,138,69,0.95) 100%)",
-              WebkitMask:
-                "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
-              WebkitMaskComposite: "xor",
-              maskComposite: "exclude",
-              pointerEvents: "none",
-              opacity: 0.9,
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 4,
-              background:
-                "linear-gradient(90deg, #f4c400 0%, #d6a800 38%, #178a45 100%)",
-            }}
-          />
-
-          <div
-            style={{
-              position: "relative",
-              zIndex: 1,
-              minHeight: 72,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textAlign: "center",
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "clamp(1.5rem, 4vw, 2.3rem)",
-                lineHeight: 1.08,
-                fontWeight: 900,
-                letterSpacing: "-0.03em",
-                color: "#f5f7fa",
-              }}
-            >
-              Entre no Mundo da Copa
-            </h2>
-          </div>
-        </section>
-      </Link>
-
-
-
       <div style={styles.brandWrap}>
         <img
           src="/logo-header-bolanobrasil.png"
@@ -698,33 +620,25 @@ export default function Home() {
           </div>
 
           <article style={styles.analysisCard}>
-          {(featuredAnalise.image_url || featuredAnalise.imagem) && (
-            <img
-              src={featuredAnalise.image_url || featuredAnalise.imagem}
-              alt={featuredAnalise.title || "Análise"}
-              style={styles.analysisImage}
-            />
-          )}
+            <div style={styles.analysisBadgeRow}>
+              <span style={styles.analysisBadge}>{featuredAnalise.category}</span>
+              <span style={styles.analysisDate}>{featuredAnalise.date}</span>
+            </div>
 
-          <div style={styles.analysisBadgeRow}>
-            <span style={styles.analysisBadge}>{featuredAnalise.category}</span>
-            <span style={styles.analysisDate}>{featuredAnalise.date}</span>
-          </div>
+            <h3 style={styles.analysisTitle}>{featuredAnalise.title}</h3>
+            <p style={styles.analysisExcerpt}>{featuredAnalise.excerpt}</p>
 
-          <h3 style={styles.analysisTitle}>{featuredAnalise.title}</h3>
-          <p style={styles.analysisExcerpt}>{featuredAnalise.excerpt}</p>
+            <div style={styles.analysisFooter}>
+              <span style={styles.analysisAuthor}>{featuredAnalise.author}</span>
 
-          <div style={styles.analysisFooter}>
-            <span style={styles.analysisAuthor}>{featuredAnalise.author}</span>
-
-            <Link
-              href={`/analises/${featuredAnalise.slug}`}
-              style={styles.analysisButton}
-            >
-              Ler análise
-            </Link>
-          </div>
-        </article>
+              <Link
+                href={`/analises/${featuredAnalise.slug}`}
+                style={styles.analysisButton}
+              >
+                Ler análise
+              </Link>
+            </div>
+          </article>
         </section>
       )}
 
@@ -812,38 +726,28 @@ export default function Home() {
                 style={{ textDecoration: "none", color: "inherit" }}
               >
                 <article style={styles.newsHomeCard}>
-          {(item.image_url || item.imagem) && (
-            <img
-              src={item.image_url || item.imagem}
-              alt={item.title || item.titulo || "Notícia"}
-              style={styles.newsHomeImage}
-            />
-          )}
+                  <div style={styles.newsHomeMetaRow}>
+                    <span style={styles.newsHomeBadge}>Notícias do Dia</span>
+                    <span style={styles.newsHomeDate}>
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        timeZone: "America/Sao_Paulo",
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(item.publishedAt))}
+                    </span>
+                  </div>
 
-          <div style={styles.newsHomeMetaRow}>
-            <span style={styles.newsHomeBadge}>Notícias do Dia</span>
-            <span style={styles.newsHomeDate}>
-              {item.publishedAt
-                ? new Intl.DateTimeFormat("pt-BR", {
-                    timeZone: "America/Sao_Paulo",
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  }).format(new Date(item.publishedAt))
-                : ""}
-            </span>
-          </div>
+                  <h3 style={styles.newsHomeTitle}>{item.title}</h3>
+                  <p style={styles.newsHomeExcerpt}>{item.excerpt}</p>
 
-          <h3 style={styles.newsHomeTitle}>{item.title || item.titulo}</h3>
-          <p style={styles.newsHomeExcerpt}>{item.excerpt || item.resumo}</p>
+                  <div style={styles.newsHomeFooter}>
+                    <span style={styles.newsHomeAuthor}>{item.author}</span>
 
-          <div style={styles.newsHomeFooter}>
-            <span style={styles.newsHomeAuthor}>
-              {item.author || "Redação BolaNoBrasil"}
-            </span>
-            <span style={styles.newsHomeButton}>Ler notícia</span>
-          </div>
-        </article>
+                    <span style={styles.newsHomeButton}>Ler notícia</span>
+                  </div>
+                </article>
               </Link>
             ))}
           </div>
@@ -1261,14 +1165,6 @@ const styles = {
     color: "#b8c2cc",
     border: "1px solid rgba(255,255,255,0.05)",
   },
-  analysisImage: {
-    width: "100%",
-    height: 220,
-    objectFit: "cover",
-    borderRadius: 14,
-    marginBottom: 14,
-    display: "block",
-  },
   analysisCard: {
     background: "linear-gradient(180deg, #101d31 0%, #0d1726 100%)",
     borderRadius: 18,
@@ -1415,14 +1311,6 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 12,
-  },
-  newsHomeImage: {
-    width: "100%",
-    height: 210,
-    objectFit: "cover",
-    borderRadius: 14,
-    marginBottom: 14,
-    display: "block",
   },
   newsHomeCard: {
     background: "#0d1726",

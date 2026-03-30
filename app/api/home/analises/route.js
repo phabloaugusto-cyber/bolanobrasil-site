@@ -60,6 +60,8 @@ export async function GET() {
         year: "numeric",
       }).format(new Date(item.published_at || item.publishedAt || item.created_at)),
       published_at: item.published_at || item.publishedAt || item.created_at || null,
+      image_url: item.image_url || item.imagem || null,
+      imagem: item.image_url || item.imagem || null,
       home_order: item.home_order ?? item.homeOrder ?? null,
       featured: Boolean(item.featured),
       show_on_home: Boolean(item.show_on_home),
