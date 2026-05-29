@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getAnaliseTimeBySlug } from "../../../lib/analises-times";
 
 function traduzirStatus(status) {
   switch (status) {
@@ -19,7 +18,7 @@ function traduzirStatus(status) {
       return "Adiado";
     case "FINISHED":
       return "Encerrado";
-    case "CANCELED":
+    case "CANCELLED":
       return "Cancelado";
     default:
       return status || "—";
@@ -47,7 +46,7 @@ function formatarDataHoraBrasil(dateString) {
       minute: "2-digit",
     }).format(new Date(dateString));
   } catch {
-    return "--/--/---- --:--";
+    return "—";
   }
 }
 
@@ -143,11 +142,180 @@ function montarResumoAutomatico({ clubeNome, teamStanding, ultimoJogo, proximoJo
   return `${fraseResultado}${fraseCampanha}${fraseProximo}`;
 }
 
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top, rgba(19,44,99,0.24) 0%, #071024 36%, #03060d 100%)",
+    color: "#f5f7fb",
+  },
+  wrap: {
+    maxWidth: 920,
+    margin: "0 auto",
+    padding: "20px 20px 160px 20px",
+    color: "#f5f7fb",
+    fontFamily: "Arial, sans-serif",
+  },
+  backLink: {
+    color: "#93c5fd",
+    textDecoration: "none",
+    fontWeight: 700,
+    fontSize: 14,
+    display: "inline-flex",
+    marginBottom: 16,
+  },
+  hero: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    padding: 18,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.18)",
+    marginBottom: 18,
+  },
+  heroCrest: {
+    width: 64,
+    height: 64,
+    objectFit: "contain",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.05)",
+    padding: 8,
+  },
+  heroCrestPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.05)",
+  },
+  heroText: { minWidth: 0 },
+  title: {
+    margin: 0,
+    fontSize: 32,
+    lineHeight: 1.05,
+    fontWeight: 900,
+  },
+  subtitle: {
+    margin: "8px 0 0",
+    color: "#d7deed",
+    fontSize: 16,
+  },
+  card: {
+    background: "#0d1726",
+    borderRadius: 20,
+    padding: 22,
+    border: "1px solid rgba(255,255,255,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    marginBottom: 18,
+  },
+  cardTitle: {
+    margin: "0 0 14px",
+    fontSize: 24,
+    lineHeight: 1.08,
+    fontWeight: 900,
+  },
+  cardTitleNoMargin: {
+    margin: 0,
+    fontSize: 24,
+    lineHeight: 1.08,
+    fontWeight: 900,
+  },
+  tableGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12,
+  },
+  statBox: {
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: 16,
+    padding: 14,
+  },
+  statLabel: {
+    display: "block",
+    fontSize: 12,
+    color: "#94a3b8",
+    marginBottom: 6,
+    fontWeight: 700,
+  },
+  statValue: {
+    fontSize: 22,
+    lineHeight: 1,
+    fontWeight: 900,
+  },
+  summaryText: {
+    margin: 0,
+    color: "#d7deed",
+    fontSize: 16,
+    lineHeight: 1.65,
+  },
+  analysisHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+  analysisDate: {
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  analysisTitle: {
+    margin: "0 0 10px",
+    fontSize: 28,
+    lineHeight: 1.1,
+    fontWeight: 900,
+  },
+  analysisExcerpt: {
+    margin: "0 0 14px",
+    color: "#d7deed",
+    fontSize: 17,
+    lineHeight: 1.6,
+  },
+  analysisFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  analysisAuthor: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: 700,
+  },
+  analysisButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    padding: "0 14px",
+    borderRadius: 14,
+    textDecoration: "none",
+    background: "rgba(59,130,246,0.12)",
+    color: "#93c5fd",
+    border: "1px solid rgba(59,130,246,0.22)",
+    fontWeight: 800,
+    fontSize: 14,
+  },
+  emptyBox: {
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: 16,
+    padding: 18,
+    color: "#d7deed",
+  },
+};
+
 export default function TimePage({ params }) {
   const { slug } = params;
 
   const [matches, setMatches] = useState([]);
   const [standings, setStandings] = useState([]);
+  const [analisesDoTime, setAnalisesDoTime] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -155,13 +323,15 @@ export default function TimePage({ params }) {
       try {
         setLoading(true);
 
-        const [matchesRes, standingsRes] = await Promise.all([
+        const [matchesRes, standingsRes, analisesRes] = await Promise.all([
           fetch("/api/matches?competition=BSA&season=2026", { cache: "no-store" }),
           fetch("/api/standings?competition=BSA&season=2026", { cache: "no-store" }),
+          fetch(`/api/posts?type=analise&club=${slug}`, { cache: "no-store" }),
         ]);
 
         const matchesData = await matchesRes.json();
         const standingsData = await standingsRes.json();
+        const analisesData = await analisesRes.json();
 
         setMatches(matchesData?.matches || []);
 
@@ -170,28 +340,31 @@ export default function TimePage({ params }) {
           standingsData?.standings?.[0];
 
         setStandings(total?.table || []);
+        setAnalisesDoTime(Array.isArray(analisesData) ? analisesData : []);
       } catch (e) {
         console.log("erro página do clube");
         setMatches([]);
         setStandings([]);
+        setAnalisesDoTime([]);
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, []);
+  }, [slug]);
 
   const teamStanding = useMemo(() => {
     return standings.find((t) => getTeamSlug(t?.team) === slug) || null;
   }, [standings, slug]);
 
   const clubeNome = teamStanding?.team?.name || slug.replace(/-/g, " ");
-const clubeEscudo =
-  slug === "athletico-pr" || slug === "athletico"
-    ? "/escudos/athletico-pr.png"
-    : teamStanding?.team?.crest || "";
-  const analiseDoTime = getAnaliseTimeBySlug(slug);
+  const clubeEscudo =
+    slug === "athletico-pr" || slug === "athletico"
+      ? "/escudos/athletico-pr.png"
+      : teamStanding?.team?.crest || "";
+
+  const analiseDoTime = analisesDoTime[0] || null;
 
   const teamMatches = useMemo(() => {
     return matches
@@ -200,18 +373,19 @@ const clubeEscudo =
   }, [matches, slug]);
 
   const agora = new Date();
-const ultimoJogo = useMemo(() => {
-  const anterioresFinalizados = teamMatches
-    .filter(
-      (m) =>
-        m?.utcDate &&
-        new Date(m.utcDate) <= agora &&
-        m?.status === "FINISHED"
-    )
-    .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
 
-  return anterioresFinalizados[0] || null;
-}, [teamMatches]);
+  const ultimoJogo = useMemo(() => {
+    const anterioresFinalizados = teamMatches
+      .filter(
+        (m) =>
+          m?.utcDate &&
+          new Date(m.utcDate) <= agora &&
+          m?.status === "FINISHED"
+      )
+      .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
+
+    return anterioresFinalizados[0] || null;
+  }, [teamMatches, agora]);
 
   const proximoJogo = useMemo(() => {
     const proximos = teamMatches
@@ -219,21 +393,9 @@ const ultimoJogo = useMemo(() => {
       .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
 
     return proximos[0] || null;
-  }, [teamMatches]);
+  }, [teamMatches, agora]);
 
-const ultimosJogos = useMemo(() => {
-  return teamMatches
-    .filter(
-      (m) =>
-        m?.utcDate &&
-        new Date(m.utcDate) <= agora &&
-        m?.status === "FINISHED"
-    )
-    .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate))
-    .slice(0, 3);
-}, [teamMatches, agora]);
-
-const resumoAutomatico = useMemo(() => {
+  const resumoAutomatico = useMemo(() => {
     return montarResumoAutomatico({
       clubeNome,
       teamStanding,
@@ -304,17 +466,30 @@ const resumoAutomatico = useMemo(() => {
               <section style={styles.card}>
                 <div style={styles.analysisHeader}>
                   <h2 style={styles.cardTitleNoMargin}>Análise do momento</h2>
-                  <span style={styles.analysisDate}>{analiseDoTime.date}</span>
+                  <span style={styles.analysisDate}>
+                    {formatarDataBrasil(
+                      analiseDoTime.published_at ||
+                        analiseDoTime.publishedAt ||
+                        analiseDoTime.created_at
+                    )}
+                  </span>
                 </div>
 
-                <h3 style={styles.analysisTitle}>{analiseDoTime.title}</h3>
-                <p style={styles.analysisExcerpt}>{analiseDoTime.excerpt}</p>
+                <h3 style={styles.analysisTitle}>
+                  {analiseDoTime.title || analiseDoTime.titulo}
+                </h3>
+
+                <p style={styles.analysisExcerpt}>
+                  {analiseDoTime.excerpt || analiseDoTime.resumo}
+                </p>
 
                 <div style={styles.analysisFooter}>
-                  <span style={styles.analysisAuthor}>{analiseDoTime.author}</span>
+                  <span style={styles.analysisAuthor}>
+                    {analiseDoTime.author || "Redação BolaNoBrasil"}
+                  </span>
 
                   <Link
-                    href={`/analises-times/${slug}`}
+                    href={`/analises-times/${analiseDoTime.slug}`}
                     style={styles.analysisButton}
                   >
                     Ler análise completa
@@ -323,91 +498,10 @@ const resumoAutomatico = useMemo(() => {
               </section>
             )}
 
-            <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Próximo jogo</h2>
-
-              {!proximoJogo ? (
-                <div style={styles.emptyBox}>Nenhum próximo jogo encontrado no momento.</div>
-              ) : (
-                <div style={styles.matchHighlight}>
-                  <div style={styles.matchMeta}>
-                    <span>{traduzirStatus(proximoJogo.status)}</span>
-                    <span>{formatarDataHoraBrasil(proximoJogo.utcDate)}</span>
-                  </div>
-
-                  <div style={styles.matchLine}>
-                    <span style={styles.teamName}>{getTeamName(proximoJogo.homeTeam)}</span>
-                    <span style={styles.versus}>x</span>
-                    <span style={styles.teamName}>{getTeamName(proximoJogo.awayTeam)}</span>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Últimos 3 jogos</h2>
-
-              {!ultimosJogos.length ? (
-                <div style={styles.emptyBox}>Nenhum jogo encontrado para este clube.</div>
-              ) : (
-                <div style={styles.list}>
-                  {ultimosJogos.map((match) => (
-                    <div key={match.id} style={styles.matchCard}>
-                      <div style={styles.matchMeta}>
-                        <span>{traduzirStatus(match.status)}</span>
-                        <span>{formatarDataBrasil(match.utcDate)}</span>
-                      </div>
-
-                      <div style={styles.scoreLine}>
-                        <span style={styles.teamLabel}>{getTeamName(match.homeTeam)}</span>
-                        <span style={styles.scoreNum}>
-                          {match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? "-"}
-                        </span>
-                      </div>
-
-                      <div style={styles.scoreLine}>
-                        <span style={styles.teamLabel}>{getTeamName(match.awayTeam)}</span>
-                        <span style={styles.scoreNum}>
-                          {match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? "-"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {teamStanding && (
-              <section style={styles.card}>
-                <h2 style={styles.cardTitle}>Campanha no Brasileirão</h2>
-
-                <div style={styles.campaignGrid}>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Vitórias</span>
-                    <strong style={styles.statValue}>{teamStanding.won}</strong>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Empates</span>
-                    <strong style={styles.statValue}>{teamStanding.draw}</strong>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Derrotas</span>
-                    <strong style={styles.statValue}>{teamStanding.lost}</strong>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Gols Pró</span>
-                    <strong style={styles.statValue}>{teamStanding.goalsFor}</strong>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Gols Contra</span>
-                    <strong style={styles.statValue}>{teamStanding.goalsAgainst}</strong>
-                  </div>
-                  <div style={styles.statBox}>
-                    <span style={styles.statLabel}>Saldo</span>
-                    <strong style={styles.statValue}>{teamStanding.goalDifference}</strong>
-                  </div>
-                </div>
-              </section>
+            {!analiseDoTime && (
+              <div style={styles.emptyBox}>
+                Nenhuma análise do momento encontrada para este clube.
+              </div>
             )}
           </>
         )}
@@ -415,220 +509,3 @@ const resumoAutomatico = useMemo(() => {
     </main>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#050816",
-    color: "#f5f7fb",
-    fontFamily: "Arial, sans-serif",
-  },
-  wrap: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "20px 16px 140px",
-  },
-  backLink: {
-    display: "inline-block",
-    marginBottom: 18,
-    textDecoration: "none",
-    color: "#7dd3fc",
-    fontWeight: 700,
-  },
-  hero: {
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-    marginBottom: 20,
-    padding: 18,
-    background: "linear-gradient(180deg, #101d31 0%, #0d1726 100%)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 18,
-  },
-  heroCrest: {
-    width: 64,
-    height: 64,
-    objectFit: "contain",
-  },
-  heroCrestPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.08)",
-  },
-  heroText: {
-    minWidth: 0,
-  },
-  title: {
-    margin: 0,
-    fontSize: 30,
-    fontWeight: 900,
-  },
-  subtitle: {
-    margin: "6px 0 0",
-    color: "#b8c2cc",
-    fontSize: 14,
-  },
-  card: {
-    background: "#0d1726",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    boxShadow: "0 10px 28px rgba(0,0,0,0.22)",
-  },
-  cardTitle: {
-    margin: "0 0 14px",
-    fontSize: 20,
-  },
-  cardTitleNoMargin: {
-    margin: 0,
-    fontSize: 20,
-  },
-  summaryText: {
-    margin: 0,
-    lineHeight: 1.8,
-    color: "#d8dee6",
-    fontSize: 15,
-  },
-  analysisHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-    marginBottom: 12,
-  },
-  analysisDate: {
-    color: "#9fb0c3",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  analysisTitle: {
-    margin: "0 0 10px 0",
-    fontSize: 22,
-    lineHeight: 1.3,
-    letterSpacing: "-0.02em",
-  },
-  analysisExcerpt: {
-    margin: "0 0 16px 0",
-    color: "#cbd5e1",
-    fontSize: 15,
-    lineHeight: 1.7,
-  },
-  analysisFooter: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  analysisAuthor: {
-    color: "#94a3b8",
-    fontSize: 14,
-    fontWeight: 600,
-  },
-  analysisButton: {
-    textDecoration: "none",
-    background: "#16304f",
-    color: "#fff",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 14,
-    padding: "12px 16px",
-    fontWeight: 700,
-    fontSize: 14,
-  },
-  tableGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 12,
-  },
-  campaignGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 12,
-  },
-  statBox: {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 14,
-    padding: 14,
-  },
-  statLabel: {
-    display: "block",
-    fontSize: 12,
-    color: "#9fb0c3",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 900,
-    color: "#fff",
-  },
-  matchHighlight: {
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 16,
-  },
-  matchMeta: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 12,
-    fontSize: 13,
-    color: "#b8c2cc",
-  },
-  matchLine: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  },
-  versus: {
-    fontWeight: 900,
-    fontSize: 22,
-    color: "#fff",
-  },
-  teamName: {
-    fontWeight: 800,
-    fontSize: 17,
-    flex: 1,
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  matchCard: {
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 14,
-  },
-  scoreLine: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    padding: "6px 0",
-  },
-  teamLabel: {
-    fontSize: 15,
-    fontWeight: 600,
-  },
-  scoreNum: {
-    fontWeight: 900,
-    fontSize: 18,
-  },
-  emptyBox: {
-    border: "1px dashed rgba(255,255,255,0.14)",
-    borderRadius: 14,
-    padding: 16,
-    textAlign: "center",
-    color: "#b8c2cc",
-  },
-};

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readMatches } from "@/lib/football-cache";
 
 function getEnv(name, fallback = "") {
   const v = process.env[name];
@@ -27,6 +28,24 @@ export async function GET(req) {
     const season =
       url.searchParams.get("season") || getEnv("DEFAULT_SEASON", "2026");
 
+    // 1) Supabase (cache do worker) — evita gastar quota da API por visita.
+    try {
+      const cached = await readMatches(competition, season);
+      if (cached) {
+        return json({
+          ok: true,
+          competition,
+          season,
+          count: cached.matches.length,
+          source: "cache",
+          matches: cached.matches,
+        });
+      }
+    } catch (e) {
+      console.error("[matches] cache indisponível:", e?.message || e);
+    }
+
+    // 2) Fallback: football-data.org ao vivo.
     const API_BASE = getEnv("API_BASE", "https://api.football-data.org/v4");
     const token = getEnv("API_KEY") || getEnv("FOOTBALL_DATA_API_KEY");
 

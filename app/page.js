@@ -152,69 +152,85 @@ export default function Home() {
       }
     : null;
 
+  async function loadHomeEditorial() {
+    const bust = Date.now();
+
+    try {
+      const [resNoticias, resAnalises, resHumor, resTecnicos] = await Promise.all([
+        fetch(`/api/home/noticias-do-dia?t=${bust}`, { cache: "no-store" }),
+        fetch(`/api/home/analises?t=${bust}`, { cache: "no-store" }),
+        fetch(`/api/home/humor-na-rodada?t=${bust}`, { cache: "no-store" }),
+        fetch(`/api/home/tecnicos?t=${bust}`, { cache: "no-store" }),
+      ]);
+
+      const [dataNoticias, dataAnalises, dataHumor, dataTecnicos] = await Promise.all([
+        resNoticias.json().catch(() => []),
+        resAnalises.json().catch(() => null),
+        resHumor.json().catch(() => null),
+        resTecnicos.json().catch(() => null),
+      ]);
+
+      const normalizadas = Array.isArray(dataNoticias)
+        ? dataNoticias.map((item) => ({
+            id: item.id,
+            slug: item.slug || "",
+            titulo: item.title || "",
+            title: item.title || "",
+            resumo: item.excerpt || "",
+            excerpt: item.excerpt || "",
+            conteudo: item.content || "",
+            content: item.content || "",
+            imagem: item.image_url || null,
+            image_url: item.image_url || null,
+            clube: item.club || null,
+            published_at: item.published_at || null,
+            publishedAt: item.published_at || null,
+          }))
+        : [];
+
+      setNoticiasHome(normalizadas);
+      setFeaturedAnaliseHome(dataAnalises && !dataAnalises.error ? dataAnalises : null);
+      setFeaturedHumorHome(dataHumor && !dataHumor.error ? dataHumor : null);
+      setFeaturedTecnicoHome(dataTecnicos && !dataTecnicos.error ? dataTecnicos : null);
+    } catch (e) {
+      console.log("erro editorial home");
+    }
+  }
+
   useEffect(() => {
-    let ativo = true;
+    let mounted = true;
 
-    fetch(`/api/home/noticias-do-dia?t=${Date.now()}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!ativo) return;
+    async function loadIfMounted() {
+      if (!mounted) return;
+      await loadHomeEditorial();
+    }
 
-        const normalizadas = Array.isArray(data)
-          ? data.map((item) => ({
-              id: item.id,
-              slug: item.slug || "",
-              titulo: item.title || "",
-              title: item.title || "",
-              resumo: item.excerpt || "",
-              excerpt: item.excerpt || "",
-              conteudo: item.content || "",
-              content: item.content || "",
-              imagem: item.image_url || null,
-              image_url: item.image_url || null,
-              clube: item.club || null,
-              published_at: item.published_at || null,
-              publishedAt: item.published_at || null,
-            }))
-          : [];
+    loadIfMounted();
 
-        setNoticiasHome(normalizadas);
-      })
-      .catch(() => {
-        if (ativo) {
-          setNoticiasHome([]);
-        }
-      });
+    const onFocus = () => {
+      if (document.visibilityState === "visible") {
+        loadIfMounted();
+      }
+    };
 
-    fetch(`/api/home/analises?t=${Date.now()}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (ativo && data && !data.error) {
-          setFeaturedAnaliseHome(data);
-        }
-      })
-      .catch(() => {});
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadIfMounted();
+      }
+    };
 
-    fetch(`/api/home/humor-na-rodada?t=${Date.now()}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (ativo && data && !data.error) {
-          setFeaturedHumorHome(data);
-        }
-      })
-      .catch(() => {});
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
 
-    fetch(`/api/home/tecnicos?t=${Date.now()}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (ativo && data && !data.error) {
-          setFeaturedTecnicoHome(data);
-        }
-      })
-      .catch(() => {});
+    const interval = setInterval(() => {
+      loadIfMounted();
+    }, 60000);
 
     return () => {
-      ativo = false;
+      mounted = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(interval);
     };
   }, []);
 

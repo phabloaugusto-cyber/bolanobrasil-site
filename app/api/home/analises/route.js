@@ -1,40 +1,56 @@
 export const dynamic = "force-dynamic";
 
-import { listPublishedPosts } from "@/lib/posts-db";
+import { getSupabaseClient } from "@/lib/supabase";
+
+function isCopa(item) {
+  const values = [
+    item?.category,
+    item?.competition,
+    item?.tag,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).trim().toLowerCase());
+
+  return values.includes("copa-do-mundo");
+}
+
+function formatarData(valor) {
+  if (!valor) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(valor));
+  } catch {
+    return "";
+  }
+}
 
 export async function GET() {
   try {
-    const posts = await listPublishedPosts({
-      type: "analise",
-      showOnHome: true,
-      featured: true,
-      limit: 20,
-    });
+    const supabase = getSupabaseClient();
 
-    const ordered = (posts || []).sort((a, b) => {
-      const orderA =
-        typeof a.home_order === "number"
-          ? a.home_order
-          : typeof a.homeOrder === "number"
-          ? a.homeOrder
-          : 9999;
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("type", "analise")
+      .eq("status", "published")
+      .eq("show_on_home", true)
+      .order("published_at", { ascending: false });
 
-      const orderB =
-        typeof b.home_order === "number"
-          ? b.home_order
-          : typeof b.homeOrder === "number"
-          ? b.homeOrder
-          : 9999;
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+        },
+      });
+    }
 
-      if (orderA !== orderB) return orderA - orderB;
-
-      const timeA = new Date(a.published_at || a.publishedAt || 0).getTime();
-      const timeB = new Date(b.published_at || b.publishedAt || 0).getTime();
-
-      return timeB - timeA;
-    });
-
-    const item = ordered[0] || null;
+    const filtrados = (Array.isArray(data) ? data : []).filter((item) => !isCopa(item));
+    const item = filtrados[0] || null;
 
     if (!item) {
       return new Response("null", {
@@ -48,21 +64,16 @@ export async function GET() {
 
     const payload = {
       id: item.id,
-      slug: item.slug,
-      title: item.title || item.titulo || "",
-      excerpt: item.excerpt || item.resumo || "",
+      slug: item.slug || "",
+      title: item.title || "",
+      excerpt: item.excerpt || "",
       author: "Redação BolaNoBrasil",
       category: "Análise",
-      date: new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(item.published_at || item.publishedAt || item.created_at)),
-      published_at: item.published_at || item.publishedAt || item.created_at || null,
-      image_url: item.image_url || item.imagem || null,
-      imagem: item.image_url || item.imagem || null,
-      home_order: item.home_order ?? item.homeOrder ?? null,
+      date: formatarData(item.published_at || item.created_at || null),
+      published_at: item.published_at || item.created_at || null,
+      image_url: item.image_url || null,
+      imagem: item.image_url || null,
+      home_order: item.home_order ?? null,
       featured: Boolean(item.featured),
       show_on_home: Boolean(item.show_on_home),
     };

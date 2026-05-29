@@ -1,7 +1,56 @@
 export const dynamic = "force-dynamic";
 
-import { listPublishedPosts } from "@/lib/posts-db";
+import { listPublishedPosts, normalizePost } from "@/lib/posts-db";
 import { getSupabaseClient } from "@/lib/supabase";
+
+function isCopa(item) {
+  const values = [
+    item?.category,
+    item?.competition,
+    item?.tag,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).trim().toLowerCase());
+
+  return values.includes("copa-do-mundo");
+}
+
+function normalizeClubValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function getPostDate(item) {
+  return new Date(
+    item?.published_at ||
+      item?.publishedAt ||
+      item?.created_at ||
+      item?.createdAt ||
+      0
+  ).getTime();
+}
+
+function sortLatestFirst(items) {
+  return [...items].sort((a, b) => getPostDate(b) - getPostDate(a));
+}
+
+function latestPerClub(items) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of sortLatestFirst(items)) {
+    const key = normalizeClubValue(item?.club);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+}
 
 export async function GET(request) {
   try {
@@ -26,8 +75,9 @@ export async function GET(request) {
     const limit =
       limitParam === null || limitParam === "" ? null : Number(limitParam);
 
+    const supabase = getSupabaseClient();
+
     if (club === "null") {
-      const supabase = getSupabaseClient();
       let query = supabase
         .from("posts")
         .select("*")
@@ -39,9 +89,7 @@ export async function GET(request) {
       if (featured !== null) query = query.eq("featured", featured);
       if (round !== null) query = query.eq("round", round);
 
-      query = query
-        .order("home_order", { ascending: true, nullsFirst: false })
-        .order("published_at", { ascending: false });
+      query = query.order("published_at", { ascending: false });
 
       if (limit) query = query.limit(limit);
 
@@ -54,8 +102,9 @@ export async function GET(request) {
         });
       }
 
-      const { normalizePost } = await import("@/lib/posts-db");
-      const posts = (data || []).map(normalizePost);
+      const posts = sortLatestFirst((data || []).map(normalizePost)).filter(
+        (item) => !isCopa(item)
+      );
 
       return new Response(JSON.stringify(posts), {
         status: 200,
@@ -67,7 +116,6 @@ export async function GET(request) {
     }
 
     if (club === "has") {
-      const supabase = getSupabaseClient();
       let query = supabase
         .from("posts")
         .select("*")
@@ -77,12 +125,9 @@ export async function GET(request) {
       if (type) query = query.eq("type", type);
       if (showOnHome !== null) query = query.eq("show_on_home", showOnHome);
       if (featured !== null) query = query.eq("featured", featured);
+      if (round !== null) query = query.eq("round", round);
 
-      query = query
-        .order("club", { ascending: true })
-        .order("published_at", { ascending: false });
-
-      if (limit) query = query.limit(limit);
+      query = query.order("published_at", { ascending: false });
 
       const { data, error } = await query;
 
@@ -93,8 +138,56 @@ export async function GET(request) {
         });
       }
 
-      const { normalizePost } = await import("@/lib/posts-db");
-      const posts = (data || []).map(normalizePost);
+      let posts = (data || [])
+        .map(normalizePost)
+        .filter((item) => !isCopa(item));
+
+      posts = latestPerClub(posts);
+
+      if (limit) posts = posts.slice(0, limit);
+
+      return new Response(JSON.stringify(posts), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      });
+    }
+
+    if (club) {
+      let query = supabase
+        .from("posts")
+        .select("*")
+        .eq("status", "published")
+        .not("club", "is", null);
+
+      if (type) query = query.eq("type", type);
+      if (showOnHome !== null) query = query.eq("show_on_home", showOnHome);
+      if (featured !== null) query = query.eq("featured", featured);
+      if (round !== null) query = query.eq("round", round);
+
+      query = query.order("published_at", { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        });
+      }
+
+      const wanted = normalizeClubValue(club);
+
+      let posts = (data || [])
+        .map(normalizePost)
+        .filter((item) => !isCopa(item))
+        .filter((item) => normalizeClubValue(item.club) === wanted);
+
+      posts = sortLatestFirst(posts);
+
+      if (limit) posts = posts.slice(0, limit);
 
       return new Response(JSON.stringify(posts), {
         status: 200,
@@ -107,14 +200,16 @@ export async function GET(request) {
 
     const posts = await listPublishedPosts({
       type: type || null,
-      club: club || null,
+      club: null,
       showOnHome,
       featured,
       round,
       limit,
     });
 
-    return new Response(JSON.stringify(posts || []), {
+    const filtrados = sortLatestFirst(posts || []).filter((item) => !isCopa(item));
+
+    return new Response(JSON.stringify(filtrados), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",

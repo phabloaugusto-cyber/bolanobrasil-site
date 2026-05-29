@@ -32,10 +32,7 @@ export async function GET() {
     const filtrados = (Array.isArray(itens) ? itens : [])
       .filter((item) => item.status === "published" && item.show_on_home === true)
       .sort((a, b) => {
-        const aOrder = a.home_order ?? 999999;
-        const bOrder = b.home_order ?? 999999;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-
+        // Destaque da home: prioriza a mudança de técnico mais recente.
         const aDate = new Date(
           a.change_date || a.published_at || a.publishedAt || 0
         ).getTime();

@@ -2,6 +2,18 @@ export const dynamic = "force-dynamic";
 
 import { getPublishedPostBySlug } from "@/lib/posts-db";
 
+function isCopa(item) {
+  const values = [
+    item?.category,
+    item?.competition,
+    item?.tag,
+  ]
+    .filter(Boolean)
+    .map((v) => String(v).trim().toLowerCase());
+
+  return values.includes("copa-do-mundo");
+}
+
 export async function GET(request, { params }) {
   try {
     const slug = params?.slug;
@@ -20,7 +32,7 @@ export async function GET(request, { params }) {
 
     const data = await getPublishedPostBySlug(slug);
 
-    if (!data) {
+    if (!data || isCopa(data)) {
       return new Response(
         JSON.stringify({ error: "Post não encontrado." }),
         {

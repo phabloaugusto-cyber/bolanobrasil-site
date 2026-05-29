@@ -36,6 +36,11 @@ services:
       dockerfile: Dockerfile.worker
     container_name: bolonobrasil-worker
     env_file: .env
+    environment:
+      # Dentro da rede do compose, o worker alcança o container web pelo nome
+      # do serviço. Sobrescreve o SITE_URL do .env (localhost, que apontaria
+      # para o próprio worker) só aqui, para a revalidação on-demand funcionar.
+      SITE_URL: http://web:3000
     depends_on:
       db:
         condition: service_healthy

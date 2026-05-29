@@ -14,3 +14,8 @@ api_BKP/
 app/admin.bak/
 app/api/admin.bak/
 
+# backups de editor e artefatos de debug
+*.bak*
+_fora-do-next/
+home-revalidate-debug.txt
+

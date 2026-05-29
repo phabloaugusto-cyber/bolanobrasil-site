@@ -6,9 +6,11 @@
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "x:post-latest": "node scripts/post-latest-to-x.mjs"
+    "x:post-latest": "node scripts/post-latest-to-x.mjs",
+    "worker:once": "node worker.js --once"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@prisma/client": "^6.11.0",
     "@supabase/supabase-js": "^2.100.0",
     "gray-matter": "^4.0.3",

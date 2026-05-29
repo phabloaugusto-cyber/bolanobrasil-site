@@ -21,26 +21,22 @@ export async function GET() {
     const { data, error } = await supabase
       .from("posts")
       .select("*")
-      .eq("type", "noticia")
+      .eq("type", "analise")
       .eq("status", "published")
-      .eq("show_on_home", true)
+      .order("home_order", { ascending: true, nullsFirst: false })
       .order("published_at", { ascending: false });
 
     if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
     }
 
-    const filtradas = (Array.isArray(data) ? data : []).filter((item) => !isCopa(item));
+    const filtradas = (Array.isArray(data) ? data : []).filter(isCopa);
+    const item = filtradas[0] || null;
 
-    return new Response(JSON.stringify(filtradas), {
+    return new Response(JSON.stringify(item), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
@@ -49,12 +45,10 @@ export async function GET() {
     });
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error?.message || "Erro ao buscar notícias." }),
+      JSON.stringify({ error: error?.message || "Erro ao buscar análise da Copa." }),
       {
         status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-        },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
       }
     );
   }

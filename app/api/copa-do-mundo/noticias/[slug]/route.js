@@ -14,29 +14,42 @@ function isCopa(item) {
   return values.includes("copa-do-mundo");
 }
 
-export async function GET() {
+export async function GET(_req, { params }) {
   try {
+    const slug = params?.slug;
+
+    if (!slug) {
+      return new Response(JSON.stringify({ error: "Slug não informado." }), {
+        status: 400,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+
     const supabase = getSupabaseClient();
 
     const { data, error } = await supabase
       .from("posts")
       .select("*")
-      .eq("type", "humor")
+      .eq("type", "noticia")
       .eq("status", "published")
-      .eq("show_on_home", true)
-      .order("published_at", { ascending: false });
+      .eq("slug", slug)
+      .limit(1);
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-        },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
       });
     }
 
-    const filtrados = (Array.isArray(data) ? data : []).filter((item) => !isCopa(item));
-    const item = filtrados[0] || null;
+    const item = Array.isArray(data) ? data[0] : null;
+
+    if (!item || !isCopa(item)) {
+      return new Response(JSON.stringify({ error: "Notícia da Copa não encontrada." }), {
+        status: 404,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
 
     return new Response(JSON.stringify(item), {
       status: 200,
@@ -47,12 +60,10 @@ export async function GET() {
     });
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error?.message || "Erro ao buscar humor." }),
+      JSON.stringify({ error: error?.message || "Erro ao buscar notícia da Copa." }),
       {
         status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-        },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
       }
     );
   }

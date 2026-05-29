@@ -23,22 +23,17 @@ export async function GET() {
       .select("*")
       .eq("type", "noticia")
       .eq("status", "published")
-      .eq("show_on_home", true)
+      .order("home_order", { ascending: true, nullsFirst: false })
       .order("published_at", { ascending: false });
 
     if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
     }
 
-    const filtradas = (Array.isArray(data) ? data : []).filter((item) => !isCopa(item));
+    const filtradas = (Array.isArray(data) ? data : []).filter(isCopa);
 
     return new Response(JSON.stringify(filtradas), {
       status: 200,
@@ -49,12 +44,10 @@ export async function GET() {
     });
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error?.message || "Erro ao buscar notícias." }),
+      JSON.stringify({ error: error?.message || "Erro ao buscar notícias da Copa." }),
       {
         status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-        },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
       }
     );
   }

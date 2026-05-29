@@ -58,6 +58,10 @@ const SELECOES_PT = {
   "Cape Verde Islands": "Cabo Verde",
   "Norway": "Noruega",
   "Uzbekistan": "Uzbequistão",
+"Bosnia and Herzegovina": "Bósnia e Herzegovina",
+"Sweden": "Suécia",
+"Czech Republic": "República Tcheca",
+"Turkey": "Turquia",
 };
 
 function traduzirSelecaoNome(nome) {
