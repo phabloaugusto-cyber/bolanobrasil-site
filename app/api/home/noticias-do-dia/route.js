@@ -38,7 +38,10 @@ export async function GET() {
       );
     }
 
-    const filtradas = (Array.isArray(data) ? data : []).filter((item) => !isCopa(item));
+    // Apenas as 3 notícias mais recentes na home (já vêm ordenadas por published_at desc).
+    const filtradas = (Array.isArray(data) ? data : [])
+      .filter((item) => !isCopa(item))
+      .slice(0, 3);
 
     return new Response(JSON.stringify(filtradas), {
       status: 200,
